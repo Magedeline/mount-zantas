@@ -2,7 +2,6 @@ using System.Diagnostics;
 using System.IO.Compression;
 using System.Text.Json;
 using System.Text.RegularExpressions;
-using Microsoft.Win32;
 
 namespace MountZantas;
 
@@ -179,18 +178,19 @@ static class EverestSvc {
         } else if (!allowUnverified) { File.Delete(tmp); throw new Exception("This build has no published checksum (beta/dev builds come from Azure DevOps). Tick \"Allow unverified builds\" to install it anyway."); }
         else log("WARNING: installing a build with no published checksum.");
         log("Extracting...");
-        var root = Path.GetFullPath(inst.Path);
+        var root = Path.GetFullPath(inst.Path).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
         await Task.Run(() => {
             using var zf = ZipFile.OpenRead(tmp);
             foreach (var e in zf.Entries) {
                 var rel = e.FullName; if (rel.StartsWith("main/")) rel = rel.Substring(5); if (rel.Length == 0 || rel.EndsWith("/")) continue;
-                var dest = Path.GetFullPath(Path.Combine(inst.Path, rel)); if (!dest.StartsWith(root, StringComparison.OrdinalIgnoreCase)) continue;
+                var dest = Path.GetFullPath(Path.Combine(inst.Path, rel)); if (!dest.StartsWith(root, Platform.Windows ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal)) continue;   // zip-slip guard
                 Directory.CreateDirectory(Path.GetDirectoryName(dest)); e.ExtractToFile(dest, true);
             }
         });
         File.Delete(tmp);
         log("Running the Everest patcher...");
-        var exe = Path.Combine(inst.Path, "MiniInstaller-win64.exe"); if (!File.Exists(exe)) exe = Path.Combine(inst.Path, "MiniInstaller-win.exe");
+        var exe = Platform.MiniInstallerPath(inst.Path); if (!File.Exists(exe)) throw new Exception("The Everest patcher for this system (" + Path.GetFileName(exe) + ") was not in the download.");
+        Platform.MakeExecutable(exe);
         var p = Process.Start(new ProcessStartInfo(exe) { WorkingDirectory = inst.Path, UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true });
         var o = await p.StandardOutput.ReadToEndAsync(); await p.WaitForExitAsync();
         if (p.ExitCode != 0) throw new Exception("Patching failed:\r\n" + o.Substring(Math.Max(0, o.Length - 600)));
@@ -206,37 +206,6 @@ static class EverestSvc {
         var mm = Path.Combine(inst.Path, "Celeste.Mod.mm.dll"); if (File.Exists(mm)) File.Delete(mm);
         var ub = Path.Combine(inst.Path, "update-build.txt"); if (File.Exists(ub)) File.Delete(ub);
         log("Everest removed. Your Mods and Saves folders were not touched.");
-    }
-}
-
-static class Loenn {
-    public static string Dir => Path.Combine(Config.DataDir, "loenn");
-    public static string Installed() { try { return File.ReadAllText(Path.Combine(Dir, "version.txt")).Trim(); } catch { return null; } }
-    public static async Task<(string tag, string url, string sha)> Latest() {
-        var j = JsonDocument.Parse(await Net.Http.GetStringAsync("https://api.github.com/repos/CelestialCartographers/Loenn/releases/latest")).RootElement;
-        foreach (var a in j.GetProperty("assets").EnumerateArray()) {
-            var n = a.GetProperty("name").GetString();
-            if (n.EndsWith("windows.zip")) return (j.GetProperty("tag_name").GetString(), a.GetProperty("browser_download_url").GetString(), a.TryGetProperty("digest", out var d) ? d.GetString()?.Replace("sha256:", "") : null);
-        }
-        throw new Exception("No Windows build found in the latest Lönn release.");
-    }
-    public static async Task Install(Action<string> log, IProgress<int> prog) {
-        var (tag, url, sha) = await Latest(); if (sha == null) throw new Exception("Lönn release has no published checksum; refusing to install.");
-        var tmp = Path.Combine(Path.GetTempPath(), "mountzantas-loenn.zip"); log($"Downloading Lönn {tag}..."); await Net.Download(url, tmp, prog);
-        if (!Net.Sha256(tmp).Equals(sha, StringComparison.OrdinalIgnoreCase)) { File.Delete(tmp); throw new Exception("Lönn download failed its checksum."); }
-        log("Verified (SHA-256). Extracting...");
-        if (Directory.Exists(Dir)) Directory.Delete(Dir, true); Directory.CreateDirectory(Dir);
-        ZipFile.ExtractToDirectory(tmp, Dir, true); File.Delete(tmp); File.WriteAllText(Path.Combine(Dir, "version.txt"), tag); log("Lönn installed.");
-    }
-    // map: optional .bin to open at startup (Lönn's launch arguments take the file as a positional argument).
-    public static void Launch(string map = null) {
-        var exe = Directory.Exists(Dir) ? Directory.GetFiles(Dir, "*.exe", SearchOption.AllDirectories).OrderBy(f => Path.GetFileName(f).StartsWith("L", StringComparison.OrdinalIgnoreCase) ? 0 : 1).FirstOrDefault() : null;
-        if (exe == null) throw new Exception("Lönn is not installed yet. Use \"Install / update Lönn\" first.");
-        var psi = new ProcessStartInfo(exe) { WorkingDirectory = Path.GetDirectoryName(exe), UseShellExecute = false };
-        // In test mode (MOUNTZANTAS_DATA set) keep Lönn's own settings away from the real Lönn/Olympus configuration.
-        if (Environment.GetEnvironmentVariable("MOUNTZANTAS_DATA") is { Length: > 0 }) { psi.ArgumentList.Add("--storage-directory"); psi.ArgumentList.Add(Path.Combine(Config.DataDir, "loenn-storage")); }
-        if (map != null) psi.ArgumentList.Add(map);
-        Process.Start(psi);
     }
 }
 
@@ -315,38 +284,6 @@ static class GameBanana {
     }
 }
 
-// Safe thumbnails: only fetched over HTTPS from known image hosts, size-limited, cached on disk, decoded into memory.
-static class Images {
-    static readonly SemaphoreSlim gate = new(6); static readonly Dictionary<string, Task<Bitmap>> mem = new();
-    public static string CacheDir => Path.Combine(Config.DataDir, "cache", "img");
-    public static bool Allowed(string url) {
-        if (!Uri.TryCreate(url, UriKind.Absolute, out var u) || u.Scheme != Uri.UriSchemeHttps) return false;
-        return u.Host == "images.gamebanana.com" || (u.Host == "raw.githubusercontent.com" && u.AbsolutePath.StartsWith("/EverestAPI/EverestAPI.github.io/"));
-    }
-    // Callers get their own copy, so a control can dispose it without affecting the shared cached image.
-    public static async Task<Bitmap> Get(string url) {
-        if (string.IsNullOrEmpty(url)) return null; Task<Bitmap> t; lock (mem) { if (!mem.TryGetValue(url, out t)) mem[url] = t = Fetch(url); }
-        var master = await t; return master == null ? null : new Bitmap(master);
-    }
-    static async Task<Bitmap> Fetch(string url) {
-        if (!Allowed(url)) return null; await gate.WaitAsync();
-        try {
-            Directory.CreateDirectory(CacheDir); var path = Path.Combine(CacheDir, Convert.ToHexString(System.Security.Cryptography.SHA1.HashData(System.Text.Encoding.UTF8.GetBytes(url))).ToLowerInvariant() + ".img"); byte[] data;
-            if (File.Exists(path)) data = await File.ReadAllBytesAsync(path);
-            else { using var r = await Net.Http.GetAsync(url); r.EnsureSuccessStatusCode(); data = await r.Content.ReadAsByteArrayAsync(); if (data.Length > 8_000_000) return null; await File.WriteAllBytesAsync(path, data); }
-            try { using var ms = new MemoryStream(data); using var img = Image.FromStream(ms); return new Bitmap(img); }
-            catch { return DecodeWebP(data); }   // Windows' built-in decoder can't read WebP, which GameBanana uses for many newer images
-        } catch { return null; } finally { gate.Release(); }
-    }
-    static bool IsWebP(byte[] d) => d.Length > 12 && d[0] == 'R' && d[1] == 'I' && d[2] == 'F' && d[3] == 'F' && d[8] == 'W' && d[9] == 'E' && d[10] == 'B' && d[11] == 'P';
-    static Bitmap DecodeWebP(byte[] d) {
-        if (!IsWebP(d)) return null;
-        using var sk = SkiaSharp.SKBitmap.Decode(d); if (sk == null || sk.Width <= 0 || sk.Width * (long)sk.Height > 40_000_000) return null;
-        using var img = SkiaSharp.SKImage.FromBitmap(sk); using var png = img.Encode(SkiaSharp.SKEncodedImageFormat.Png, 100); using var ms = new MemoryStream(png.ToArray()); using var gdi = Image.FromStream(ms); return new Bitmap(gdi);
-    }
-    public static int Clear() { int n = 0; try { if (Directory.Exists(CacheDir)) foreach (var f in Directory.GetFiles(CacheDir)) { try { File.Delete(f); n++; } catch { } } } catch { } lock (mem) mem.Clear(); return n; }
-}
-
 // Community news (the same public feed Olympus shows).
 record NewsItem(string Title, string Text, string Image, string Link);
 static class News {
@@ -362,6 +299,9 @@ static class News {
 
 // Topo: the CEL map editor (github.com/Magedeline/Topo). Installed per user, launched with CELESTE_DIR pointing at the selected install.
 static class Topo {
+    // Topo is a Windows (WinForms) program, so it is only offered on Windows.
+    public static bool Supported => Platform.Windows;
+    static void Need() { if (!Supported) throw new Exception("Topo is only available on Windows."); }
     public static string Dir => Path.Combine(Config.DataDir, "topo");
     public static string Installed() { try { return File.ReadAllText(Path.Combine(Dir, "version.txt")).Trim(); } catch { return null; } }
     public static async Task<(string tag, string url, string sha)> Latest(bool ai) {
@@ -374,7 +314,7 @@ static class Topo {
         throw new Exception("No matching Topo download found in the latest release.");
     }
     public static async Task Install(bool ai, Action<string> log, IProgress<int> prog) {
-        var (tag, url, sha) = await Latest(ai); if (sha == null) throw new Exception("The Topo release has no published checksum; refusing to install it.");
+        Need(); var (tag, url, sha) = await Latest(ai); if (sha == null) throw new Exception("The Topo release has no published checksum; refusing to install it.");
         var tmp = Path.Combine(Path.GetTempPath(), "mountzantas-topo.zip"); log($"Downloading Topo {tag}{(ai ? " (+ AI)" : "")}..."); await Net.Download(url, tmp, prog);
         if (!Net.Sha256(tmp).Equals(sha, StringComparison.OrdinalIgnoreCase)) { File.Delete(tmp); throw new Exception("Topo download failed its checksum. Nothing was installed."); }
         log("Verified (SHA-256)."); Extract(tmp, tag + (ai ? " + AI" : ""), log); File.Delete(tmp);
@@ -386,7 +326,7 @@ static class Topo {
         ZipFile.ExtractToDirectory(zip, Dir, true); File.WriteAllText(Path.Combine(Dir, "version.txt"), label); log("Topo installed.");
     }
     public static void Launch(Install inst, string map = null) {
-        var exe = Path.Combine(Dir, "Topo.exe"); if (!File.Exists(exe)) throw new Exception("Topo is not installed yet.");
+        Need(); var exe = Path.Combine(Dir, "Topo.exe"); if (!File.Exists(exe)) throw new Exception("Topo is not installed yet.");
         var psi = new ProcessStartInfo(exe) { WorkingDirectory = Dir, UseShellExecute = false };
         if (map != null) { psi.ArgumentList.Add("--map"); psi.ArgumentList.Add(map); }   // Topo: --map <file.bin>
         if (inst != null) psi.Environment["CELESTE_DIR"] = inst.Path;   // Topo checks CELESTE_DIR when locating the game
@@ -394,41 +334,3 @@ static class Topo {
     }
 }
 
-static class Detect {
-    static readonly HashSet<string> SkipDirs = new(StringComparer.OrdinalIgnoreCase) { "node_modules", ".git", "Mods", "Content", "Saves", "Backups", "AppData", "orig", "bin", "obj" };
-    static void Scan(string dir, int depth, List<(string, string)> into) {
-        if (depth < 0 || string.IsNullOrEmpty(dir) || !Directory.Exists(dir)) return;
-        if (File.Exists(Path.Combine(dir, "Celeste.exe"))) { into.Add((File.Exists(Path.Combine(dir, ".itch", "receipt.json.gz")) ? "itch" : "Other", dir)); return; }
-        foreach (var d in Directory.EnumerateDirectories(dir)) { var n = Path.GetFileName(d); if (SkipDirs.Contains(n) || n.Contains("backup", StringComparison.OrdinalIgnoreCase) || n.Contains("overwrite", StringComparison.OrdinalIgnoreCase)) continue; try { Scan(d, depth - 1, into); } catch { } }
-    }
-    public static List<Install> FindAll() {
-        var c = new List<(string store, string path)>();
-        try {
-            foreach (var k in new[] { @"HKEY_CURRENT_USER\Software\Valve\Steam", @"HKEY_LOCAL_MACHINE\SOFTWARE\WOW6432Node\Valve\Steam" }) {
-                var steam = (Registry.GetValue(k, "SteamPath", null) ?? Registry.GetValue(k, "InstallPath", null)) as string; if (steam == null) continue;
-                c.Add(("Steam", Path.Combine(steam, "steamapps", "common", "Celeste")));
-                var vdf = Path.Combine(steam, "steamapps", "libraryfolders.vdf");
-                if (File.Exists(vdf)) foreach (Match m in Regex.Matches(File.ReadAllText(vdf), "\"path\"\\s+\"([^\"]+)\"")) c.Add(("Steam", Path.Combine(m.Groups[1].Value.Replace("\\\\", "\\"), "steamapps", "common", "Celeste")));
-            }
-        } catch { }
-        var appdata = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
-        try { var itch = Path.Combine(appdata, "itch", "apps"); if (Directory.Exists(itch)) foreach (var d in Directory.GetDirectories(itch)) c.Add(("itch", d)); } catch { }
-        try {
-            foreach (var root in new[] { @"SOFTWARE\WOW6432Node\GOG.com\Games", @"SOFTWARE\GOG.com\Games" }) {
-                using var k = Registry.LocalMachine.OpenSubKey(root); if (k == null) continue;
-                foreach (var sub in k.GetSubKeyNames()) { using var g = k.OpenSubKey(sub); if ((g?.GetValue("gameName") as string) == "Celeste" && g.GetValue("path") is string gp) c.Add(("GOG", gp)); }
-            }
-        } catch { }
-        try {
-            var epic = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "Epic", "EpicGamesLauncher", "Data", "Manifests");
-            if (Directory.Exists(epic)) foreach (var f in Directory.GetFiles(epic, "*.item")) { var j = JsonDocument.Parse(File.ReadAllText(f)).RootElement; if (j.TryGetProperty("DisplayName", out var n) && n.GetString() == "Celeste" && j.TryGetProperty("InstallLocation", out var l)) c.Add(("Epic", l.GetString())); }
-        } catch { }
-        // Custom locations (e.g. an itch library on the Desktop): look a few folders deep for Celeste.exe.
-        foreach (var sf in new[] { Environment.SpecialFolder.DesktopDirectory, Environment.SpecialFolder.MyDocuments, Environment.SpecialFolder.UserProfile })
-            try { Scan(Environment.GetFolderPath(sf), 3, c); } catch { }
-        foreach (var d in DriveInfo.GetDrives().Where(x => x.IsReady)) { c.Add(("Steam", Path.Combine(d.Name, "Program Files (x86)", "Steam", "steamapps", "common", "Celeste"))); c.Add(("Other", Path.Combine(d.Name, "Games", "Celeste"))); }
-        // A real install has Celeste.exe and a Content folder (this skips stripped reference-library copies).
-        return c.Where(x => File.Exists(Path.Combine(x.path, "Celeste.exe")) && Directory.Exists(Path.Combine(x.path, "Content"))).GroupBy(x => Path.GetFullPath(x.path).TrimEnd('\\').ToLowerInvariant()).Select(g => g.First())
-                .Select((x, n) => new Install { Name = $"{x.store} (#{n + 1})", Path = Path.GetFullPath(x.path).TrimEnd('\\'), Store = x.store }).ToList();
-    }
-}

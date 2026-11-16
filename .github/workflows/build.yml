@@ -1,19 +1,36 @@
 name: build
 on:
   push:
-    branches: [main]
+  pull_request:
   workflow_dispatch:
 
 jobs:
-  build:
+  # The portable core, checked on all three operating systems (OS-specific paths, Everest patcher choice,
+  # executable permissions, game detection on fake home folders, map reading, and the live services).
+  core-checks:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Core checks
+        run: dotnet run --project tests/MountZantas.CoreChecks -c Release
+
+  windows-app:
     runs-on: windows-latest
+    needs: core-checks
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '8.0.x'
       - name: Publish
-        run: dotnet publish -c Release -o dist
+        run: dotnet publish MountZantas.csproj -c Release -o dist
       - name: Checksum
         shell: pwsh
         run: (Get-FileHash dist/MountZantas.exe -Algorithm SHA256).Hash.ToLower() + "  MountZantas.exe" | Set-Content dist/SHA256SUMS.txt
