@@ -15,7 +15,7 @@
     <Product>Mount Zantas</Product>
     <AssemblyTitle>Mount Zantas</AssemblyTitle>
     <Description>Launcher and mod manager for Celeste (uses the Everest mod loader).</Description>
-    <Version>0.6.4</Version>
+    <Version>0.6.5</Version>
     <Copyright>Copyright (c) Magedeline</Copyright>
     <DebugType>none</DebugType>
     <ApplicationIcon>app.ico</ApplicationIcon>
