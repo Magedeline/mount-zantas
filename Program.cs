@@ -145,9 +145,23 @@ class MainForm : Form {
         Controls.Add(host); Controls.Add(top);
         if (Cfg.Installs.Count == 0) { Cfg.Installs.AddRange(Detect.FindAll()); Cfg.Save(); }
         Main();
+        try { SelfUpdate.Cleanup(Environment.ProcessPath); } catch { }
         Shown += async (_, _) => {
+            if (Cfg.AutoUpdateApp && Environment.GetEnvironmentVariable("MOUNTZANTAS_DATA") == null) await CheckSelfUpdate(false, s => { });
             if (Cfg.UpdateOnStartup && Cfg.Current != null) { try { await ModUpdate.All(Cfg.Current, Cfg, s => { }); } catch { } }
         };
+    }
+    // Looks at the GitHub releases for a newer Mount Zantas. Asks first, verifies the checksum, then restarts into the new version.
+    public async Task CheckSelfUpdate(bool manual, Action<string> say) {
+        try {
+            var exe = Environment.ProcessPath; if (exe == null || !exe.EndsWith("MountZantas.exe", StringComparison.OrdinalIgnoreCase)) { if (manual) say("Updating only works from the installed MountZantas.exe."); return; }
+            var cur = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "0.0.0";
+            var r = await SelfUpdate.Check(cur); if (r == null) { if (manual) say($"You have the latest version ({cur})."); return; }
+            if (MessageBox.Show($"Mount Zantas {r.Version} is available (you have {cur}).\nUpdate now? It downloads from GitHub, is checked against its published checksum, and restarts.", Brand.Name, MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
+            say($"Downloading Mount Zantas {r.Version}...");
+            var tmp = await SelfUpdate.Download(r, exe); SelfUpdate.Swap(exe, tmp);
+            Process.Start(new ProcessStartInfo(exe) { UseShellExecute = true }); Close();
+        } catch (Exception ex) { if (manual) say("Update failed: " + ex.Message); }
     }
     public void Main() => Show(new MainPage(this), "");
     public void Show(Control page, string title) {

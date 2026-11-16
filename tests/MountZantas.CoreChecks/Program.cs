@@ -43,6 +43,16 @@ static class Checks {
             Mods.WriteDisabled(inst, new[] { "Beta.zip" }); var again = Mods.Scan(inst); Ok(!again.Single(m => m.Name == "Beta").Enabled && again.Single(m => m.Name == "Alpha").Enabled, "blacklist.txt disables a mod and round-trips");
         }
 
+        // ----- unused helpers after disabling a mod (the Olympus-style prompt) -----
+        {
+            ModInfo M(string n, params string[] deps) => new ModInfo { File = n + ".zip", Name = n, Enabled = true, Deps = deps };
+            var game = M("Game", "Everest", "HelperA", "HelperB"); var other = M("Other", "HelperB"); var a = M("HelperA", "Lib"); var b = M("HelperB"); var lib = M("Lib");
+            var all = new List<ModInfo> { game, other, a, b, lib }; game.Enabled = false;
+            var un = Mods.UnusedAfterDisable(all, new[] { game }).Select(m => m.Name).ToArray();
+            Ok(un.SequenceEqual(new[] { "HelperA", "Lib" }), "disabling a mod offers its helpers that nothing else needs (and their helpers), but keeps shared ones: " + string.Join(",", un));
+            Ok(Mods.UnusedAfterDisable(all, new[] { other }).Count == 0, "no offer when the helpers are still required by an enabled mod");
+        }
+
         // ----- detection on fake home folders (Linux and macOS layouts) -----
         {
             var home = Temp("home"); var lib2 = Temp("steamlib2");
@@ -115,6 +125,11 @@ static class Checks {
         });
         await Net("news", async () => { var news = await News.Get(); Ok(news.Count >= 5 && news.All(n => n.Image.Length == 0 || ImageStore.Allowed(n.Image)), $"news feed: {news.Count} items, images on allowed hosts"); });
         await Net("loenn", async () => { var l = await Loenn.Latest(); Ok(l.sha != null && Loenn.IsMyAsset(l.name), $"Lönn {l.tag} has a checksummed build for {Platform.Name}: {l.name}"); });
+        await Net("self-update", async () => {
+            var r = await SelfUpdate.Check("0.0.1"); Ok(r != null && r.Sha256.Length == 64 && r.Url.StartsWith("https://github.com/" + SelfUpdate.Repo + "/releases/download/"), "an older build finds the GitHub release with a checksum");
+            Ok(await SelfUpdate.Check("99.0.0") == null, "no update offered when already newest");
+            if (r != null) { var exe = Path.Combine(Temp("selfupd"), "MountZantas.exe"); Touch(exe, "old"); var tmp = await SelfUpdate.Download(r, exe); Ok(Net_.Sha256(tmp) == r.Sha256, "the update downloads and matches its checksum"); SelfUpdate.Swap(exe, tmp); Ok(File.Exists(exe + ".old") && new FileInfo(exe).Length > 1000, "swap keeps the old exe aside and installs the new one"); SelfUpdate.Cleanup(exe); Ok(!File.Exists(exe + ".old"), "cleanup removes the old exe"); }
+        });
         await Net("topo", async () => { Ok(Topo.Supported == Platform.Windows, "Topo is offered on Windows only"); if (Topo.Supported) { var t = await Topo.Latest(false); Ok(t.sha != null, "Topo release has a checksum"); } else { bool refused = false; try { await Topo.Install(false, _ => { }, null); } catch (Exception ex) { refused = ex.Message.Contains("Windows"); } Ok(refused, "Topo install is refused with a clear message off Windows"); } });
 
         Console.WriteLine($"\n{pass} passed, {fail} failed on {Platform.Name}"); foreach (var f in failures) Console.WriteLine("  FAILED: " + f);

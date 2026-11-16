@@ -20,7 +20,7 @@ class ModsPage : Page {
         grid.Columns[2].Width = 280; grid.Columns[3].Width = 100; grid.Columns[4].Width = 100; grid.Columns[5].Width = 250; grid.Columns[6].AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill;
         for (int i = 2; i < 7; i++) grid.Columns[i].ReadOnly = true;
         grid.CurrentCellDirtyStateChanged += (_, _) => { if (grid.IsCurrentCellDirty) grid.CommitEdit(DataGridViewDataErrorContexts.Commit); };
-        grid.CellValueChanged += OnCell; grid.CellDoubleClick += (_, e) => { if (e.RowIndex >= 0 && e.ColumnIndex >= 2 && grid.Rows[e.RowIndex].Tag is ModInfo m) { m.Enabled = !m.Enabled; Save(); grid.Rows[e.RowIndex].Cells[1].Value = m.Enabled; } };
+        grid.CellValueChanged += OnCell; grid.CellDoubleClick += (_, e) => { if (e.RowIndex >= 0 && e.ColumnIndex >= 2 && grid.Rows[e.RowIndex].Tag is ModInfo m) { m.Enabled = !m.Enabled; Save(); grid.Rows[e.RowIndex].Cells[1].Value = m.Enabled; } };   // setting the cell raises OnCell, which offers the unused-helper prompt
         grid.CellMouseUp += (_, e) => { if (e.Button == MouseButtons.Right && e.RowIndex >= 0) { if (!grid.Rows[e.RowIndex].Selected) { grid.ClearSelection(); grid.Rows[e.RowIndex].Selected = true; } RowMenu(); } };
 
         var top = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, FlowDirection = FlowDirection.LeftToRight, WrapContents = true };
@@ -69,12 +69,20 @@ class ModsPage : Page {
     void OnCell(object s, DataGridViewCellEventArgs e) {
         if (binding || e.RowIndex < 0 || grid.Rows[e.RowIndex].Tag is not ModInfo m) return; bool v = (bool)(grid.Rows[e.RowIndex].Cells[e.ColumnIndex].Value ?? false);
         if (e.ColumnIndex == 0) { if (v) App.Cfg.Favorites.Add(m.Name); else App.Cfg.Favorites.Remove(m.Name); App.Cfg.Save(); }
-        else if (e.ColumnIndex == 1) { m.Enabled = v; Save(); ComputeIssues(); binding = true; foreach (DataGridViewRow r in grid.Rows) StyleRow(r); binding = false; RefreshCounts(); }
+        else if (e.ColumnIndex == 1) { m.Enabled = v; Save(); ComputeIssues(); binding = true; foreach (DataGridViewRow r in grid.Rows) StyleRow(r); binding = false; RefreshCounts(); if (!v) BeginInvoke(() => OfferUnused(new[] { m })); }
+    }
+    // Like Olympus: after disabling a mod, offer to also disable helpers that nothing enabled needs any more.
+    void OfferUnused(IEnumerable<ModInfo> justDisabled) {
+        var unused = Mods.UnusedAfterDisable(all, justDisabled); if (unused.Count == 0) return;
+        var lines = string.Join("\n", unused.Select(m => "- " + m.Name + (m.Name != m.File ? " · " + System.IO.Path.GetFileNameWithoutExtension(m.File) : "")));
+        if (MessageBox.Show($"{unused.Count} other mod{(unused.Count == 1 ? " is" : "s are")} no longer required for any enabled mod.\nDo you want to disable {(unused.Count == 1 ? "it" : "them")} as well?\n\n{lines}", Brand.Name, MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
+        foreach (var m in unused) m.Enabled = false; Save(); Bind(); log.Log($"Also disabled {unused.Count} unused mod(s).");
     }
     void Save() { try { Mods.WriteDisabled(Inst, all.Where(m => !m.Enabled).Select(m => m.File)); } catch (Exception ex) { log.Log("Couldn't save blacklist: " + ex.Message); } }
     void SetSelected(bool on) {
         var rows = grid.SelectedRows.Cast<DataGridViewRow>().Select(r => r.Tag as ModInfo).Where(m => m != null).ToList(); if (rows.Count == 0) { log.Log("Select one or more mods first."); return; }
         foreach (var m in rows) m.Enabled = on; Save(); Bind(); log.Log($"{(on ? "Enabled" : "Disabled")} {rows.Count} mod(s). Restart Celeste for it to take effect.");
+        if (!on) OfferUnused(rows);
     }
     async Task FixDeps() {
         ComputeIssues(); if (issues.Count == 0) { log.Log("No dependency problems found."); return; }
@@ -169,8 +177,10 @@ class OptionsPage : Page {
 
         var up = Ui.Check("Update mods on startup", App.Cfg.UpdateOnStartup); up.CheckedChanged += (_, _) => { App.Cfg.UpdateOnStartup = up.Checked; App.Cfg.Save(); };
         var cl = Ui.Check("Close Mount Zantas after starting Celeste", App.Cfg.CloseOnLaunch); cl.CheckedChanged += (_, _) => { App.Cfg.CloseOnLaunch = cl.Checked; App.Cfg.Save(); };
-        up.Margin = cl.Margin = new Padding(0, 4, 0, 4);
-        Put(Ui.Section("Behaviour", up, cl), 1, 1);
+        var au = Ui.Check("Update Mount Zantas itself (from GitHub)", App.Cfg.AutoUpdateApp); au.CheckedChanged += (_, _) => { App.Cfg.AutoUpdateApp = au.Checked; App.Cfg.Save(); };
+        var cu = Ui.Btn("Check for a Mount Zantas update", () => _ = App.CheckSelfUpdate(true, log.Log), 320); cu.Margin = new Padding(0, 4, 0, 0);
+        up.Margin = cl.Margin = au.Margin = new Padding(0, 4, 0, 4);
+        Put(Ui.Section("Behaviour", up, cl, au, cu), 1, 1);
 
         var mi = Ui.Combo("0x0a.de mirror (default)", "GameBanana (original links)"); mi.SelectedIndex = App.Cfg.Mirror == "gamebanana" ? 1 : 0;
         mi.SelectedIndexChanged += (_, _) => { App.Cfg.Mirror = mi.SelectedIndex == 1 ? "gamebanana" : "0x0a.de"; App.Cfg.Save(); };
