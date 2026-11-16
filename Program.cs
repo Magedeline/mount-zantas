@@ -74,10 +74,10 @@ static class Program {
                 var maps = MapFinder.Scan(found[0]); Ok(maps.Count > 10, $"found {maps.Count} maps in mods ({maps.Count(m => m.Loose)} loose, {maps.Count(m => !m.Loose)} in zips)");
                 int okc = 0, bad = 0; var errs = new List<string>();
                 foreach (var m in maps.Where(m => m.Loose && m.Display.Contains("CEL", StringComparison.OrdinalIgnoreCase) || m.Loose).Take(40)) {
-                    try { var mi = MapFinder.Load(m); var (bmp, txt) = MapBin.Render(mi, Brand.Accent); if (bmp.Width > 0 && mi.Rooms.Count > 0) okc++; else bad++; bmp.Dispose(); } catch (Exception ex) { bad++; errs.Add(m.Display + ": " + ex.Message); }
+                    try { var mi = MapFinder.Load(m); var (bmp, txt) = MapRender.Render(mi, Brand.Accent); if (bmp.Width > 0 && mi.Rooms.Count > 0) okc++; else bad++; bmp.Dispose(); } catch (Exception ex) { bad++; errs.Add(m.Display + ": " + ex.Message); }
                 }
                 Ok(okc > 0 && bad == 0, $"rendered {okc} loose maps ({bad} failed){(errs.Count > 0 ? " e.g. " + errs[0] : "")}");
-                var zm = maps.FirstOrDefault(m => !m.Loose); if (zm != null) { try { var mi = MapFinder.Load(zm); var (bmp, txt) = MapBin.Render(mi, Brand.Accent); Ok(mi.Rooms.Count > 0, $"rendered a map from a zip: {zm.Mod} / {zm.Display} → {txt}"); bmp.Dispose(); } catch (Exception ex) { Ok(false, "zip map failed: " + ex.Message); } }
+                var zm = maps.FirstOrDefault(m => !m.Loose); if (zm != null) { try { var mi = MapFinder.Load(zm); var (bmp, txt) = MapRender.Render(mi, Brand.Accent); Ok(mi.Rooms.Count > 0, $"rendered a map from a zip: {zm.Mod} / {zm.Display} → {txt}"); bmp.Dispose(); } catch (Exception ex) { Ok(false, "zip map failed: " + ex.Message); } }
                 if (zm != null) {
                     var dest = MapFinder.CopyPath(zm); bool existed = File.Exists(dest); var modDir = Path.GetDirectoryName(dest);
                     try {

@@ -25,6 +25,11 @@
     <PackageReference Include="SkiaSharp" Version="2.88.9" />
     <PackageReference Include="SkiaSharp.NativeAssets.Win32" Version="2.88.9" />
   </ItemGroup>
+  <ItemGroup>
+    <!-- The portable logic lives in core/ (and is checked on Linux and macOS in CI); this project is the Windows UI on top of it. -->
+    <ProjectReference Include="core\MountZantas.Core.csproj" />
+    <Compile Remove="core\**;tests\**" />
+  </ItemGroup>
 </Project>
 
 
