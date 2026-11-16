@@ -21,7 +21,7 @@ A launcher and mod manager for [Celeste](https://www.celestegame.com/). It runs 
 
 ## Install
 
-1. Download `MountZantas.exe` from the [latest release](../../releases/latest). It is one self-contained file, so you don't need .NET.
+1. Download `MountZantas.exe` from the [latest release](../../releases/latest), or the zip from [Game Jolt](https://gamejolt.com/games/mount-zantas/1119502). It is one self-contained file, so you don't need .NET.
 2. Run it. You need your own copy of Celeste (Steam, Epic, GOG or itch). Celeste is not included.
 3. Optional: compare the file's SHA-256 with `SHA256SUMS.txt` on the release page.
 
