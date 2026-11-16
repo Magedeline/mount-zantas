@@ -4,6 +4,7 @@ namespace MountZantas;
 // Decoding is left to the UI layer, because each UI toolkit has its own image type.
 static class ImageStore {
     static readonly SemaphoreSlim gate = new(6); static readonly Dictionary<string, Task<byte[]>> mem = new();
+    public static string LastError;   // why the last fetch failed (for diagnostics)
     public static string CacheDir => Path.Combine(Config.DataDir, "cache", "img");
 
     public static bool Allowed(string url) {
@@ -13,7 +14,14 @@ static class ImageStore {
 
     public static Task<byte[]> GetBytes(string url) {
         if (string.IsNullOrEmpty(url)) return Task.FromResult<byte[]>(null);
-        lock (mem) { if (!mem.TryGetValue(url, out var t)) mem[url] = t = Fetch(url); return t; }
+        lock (mem) { if (!mem.TryGetValue(url, out var t)) mem[url] = t = Remember(url); return t; }
+    }
+
+    // One retry for a flaky host, and a failure is never kept: the next request tries again.
+    static async Task<byte[]> Remember(string url) {
+        var d = await Fetch(url); if (d == null && Allowed(url)) { await Task.Delay(800); d = await Fetch(url); }
+        if (d == null) lock (mem) mem.Remove(url);
+        return d;
     }
 
     static async Task<byte[]> Fetch(string url) {
@@ -24,7 +32,7 @@ static class ImageStore {
             if (File.Exists(path)) data = await File.ReadAllBytesAsync(path);
             else { using var r = await Net.Http.GetAsync(url); r.EnsureSuccessStatusCode(); data = await r.Content.ReadAsByteArrayAsync(); if (data.Length > 8_000_000) return null; await File.WriteAllBytesAsync(path, data); }
             return data;
-        } catch { return null; } finally { gate.Release(); }
+        } catch (Exception ex) { LastError = ex.GetType().Name + ": " + ex.Message; return null; } finally { gate.Release(); }
     }
 
     public static int Clear() {

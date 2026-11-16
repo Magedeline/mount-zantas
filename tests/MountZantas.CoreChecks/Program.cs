@@ -123,7 +123,7 @@ static class Checks {
             var (top, _) = await GameBanana.Search("", 1); int ok = 0, webp = 0; foreach (var m in top.Where(m => m.Thumb != null).Take(12)) { var b = await ImageStore.GetBytes(m.Thumb); if (b != null && b.Length > 100) ok++; if (ImageStore.IsWebP(b)) webp++; }
             Ok(ok == 12, $"thumbnails download through the image store ({ok}/12, {webp} are WebP)");
         });
-        await Net("news", async () => { var news = await News.Get(); Ok(news.Count >= 5 && news.All(n => n.Image.Length == 0 || ImageStore.Allowed(n.Image)), $"news feed: {news.Count} items, images on allowed hosts"); });
+        await Net("news", async () => { var news = await News.Get(); Ok(news.Count >= 5 && news.All(n => n.Image.Length == 0 || ImageStore.Allowed(n.Image)), $"news feed: {news.Count} items, images on allowed hosts"); var ni = news.First(n => n.Image.Length > 0).Image; var nb = await ImageStore.GetBytes(ni); Ok(nb != null && nb.Length > 1000, $"the newest news image downloads ({nb?.Length ?? -1} bytes)"); });
         await Net("loenn", async () => { var l = await Loenn.Latest(); Ok(l.sha != null && Loenn.IsMyAsset(l.name), $"Lönn {l.tag} has a checksummed build for {Platform.Name}: {l.name}"); });
         await Net("self-update", async () => {
             var r = await SelfUpdate.Check("0.0.1"); Ok(r != null && r.Sha256.Length == 64 && r.Url.StartsWith("https://github.com/" + SelfUpdate.Repo + "/releases/download/"), "an older build finds the GitHub release with a checksum");
