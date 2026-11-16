@@ -63,7 +63,7 @@ static class Checks {
             if (Platform.Windows) Touch(Path.Combine(inst.Path, "Celeste.exe")); else if (Platform.Mac) { inst.Path = Path.Combine(Temp("app"), "Celeste.app", "Contents", "Resources"); Directory.CreateDirectory(inst.Path); Touch(Path.Combine(inst.Path, "..", "MacOS", "Celeste")); } else Touch(Path.Combine(inst.Path, "Celeste"));
             var exe = GameLauncher.FindExecutable(inst); Ok(exe != null && File.Exists(exe), "launcher for " + Platform.Name + " is found: " + Path.GetFileName(exe ?? "(none)"));
             Ok(GameLauncher.FindExecutable(new Install { Path = Temp("empty") }) == null, "no launcher reported for an empty folder");
-            if (!Platform.Windows) { var f = Path.Combine(Temp("exec"), "run.sh"); Touch(f, "#!/bin/sh\necho hi\n"); Platform.MakeExecutable(f); Ok((File.GetUnixFileMode(f) & UnixFileMode.UserExecute) != 0, "executable permission is set (zip extraction drops it)"); }
+            if (!OperatingSystem.IsWindows()) { var f = Path.Combine(Temp("exec"), "run.sh"); Touch(f, "#!/bin/sh\necho hi\n"); Platform.MakeExecutable(f); Ok((File.GetUnixFileMode(f) & UnixFileMode.UserExecute) != 0, "executable permission is set (zip extraction drops it)"); }
         }
 
         // ----- Everest uninstall restores the originals (works on any OS) -----
@@ -98,7 +98,7 @@ static class Checks {
             Ok(new[] { "MiniInstaller-win64.exe", "MiniInstaller-linux", "MiniInstaller-osx" }.All(names.Contains), "Everest ships the patcher for Windows, Linux and macOS");
             var ex = Temp("extract"); var entry = zf.Entries.First(e => Path.GetFileName(e.FullName) == Platform.MiniInstallerNames(Platform.Windows, Platform.Mac)[0]); var target = Path.Combine(ex, Path.GetFileName(entry.FullName)); entry.ExtractToFile(target);
             Ok(File.Exists(Platform.MiniInstallerPath(ex)), "the patcher for this OS is found by name after extraction");
-            if (!Platform.Windows) { Platform.MakeExecutable(target); Ok((File.GetUnixFileMode(target) & UnixFileMode.UserExecute) != 0, "the extracted patcher can be made executable"); }
+            if (!OperatingSystem.IsWindows()) { Platform.MakeExecutable(target); Ok((File.GetUnixFileMode(target) & UnixFileMode.UserExecute) != 0, "the extracted patcher can be made executable"); }
         });
         await Net("gamebanana", async () => {
             var (items, total) = await GameBanana.Search("glyph", 1); Ok(items.Any(m => m.Name == "Glyph") && total > 0, $"GameBanana search ({items.Count} results)");
