@@ -1,0 +1,25 @@
+name: build
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Publish
+        run: dotnet publish -c Release -o dist
+      - name: Checksum
+        shell: pwsh
+        run: (Get-FileHash dist/MountZantas.exe -Algorithm SHA256).Hash.ToLower() + "  MountZantas.exe" | Set-Content dist/SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MountZantas-unsigned
+          path: |
+            dist/MountZantas.exe
+            dist/SHA256SUMS.txt
