@@ -42,8 +42,8 @@ class MainPage : Page {
         var logo = new PictureBox { Image = Brand.Logo(96), SizeMode = PictureBoxSizeMode.Zoom, Width = 96, Height = 96, Dock = DockStyle.Left };
         var name = Ui.Lbl(Brand.Name, 30, true); name.Location = new Point(110, 14); var tag = Ui.Lbl("Celeste launcher and mod manager", 10, false, Brand.Dim); tag.Location = new Point(114, 64);
         title.Controls.AddRange(new Control[] { logo, name, tag });
-        var row1 = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 1 }; row1.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50)); row1.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
-        row1.Controls.Add(Ui.Big("Everest", null, () => App.Show(new EverestPage(App), "Everest Installer")), 0, 0); row1.Controls.Add(Ui.Big("Celeste", null, () => App.LaunchCeleste()), 1, 0);
+        var row1 = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 3, RowCount = 1 }; for (int c = 0; c < 3; c++) row1.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f / 3));
+        row1.Controls.Add(Ui.Big("Everest", null, () => App.Show(new EverestPage(App), "Everest Installer")), 0, 0); row1.Controls.Add(Ui.Big("Celeste", null, () => App.LaunchCeleste()), 1, 0); row1.Controls.Add(Ui.Big("Zantas Debug", null, () => App.LaunchCeleste("--debug")), 2, 0);
         mid.Controls.Add(title, 0, 0); mid.Controls.Add(row1, 0, 1);
         mid.Controls.Add(Ui.Big("Download Mods", null, () => App.Show(new DownloadPage(App), "Download Mods")), 0, 2);
         mid.Controls.Add(Ui.Big("Manage Installed Mods", null, () => App.Show(new ModsPage(App), "Mod Manager")), 0, 3);

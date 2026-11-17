@@ -168,10 +168,10 @@ class MainForm : Form {
         host.Controls.Clear(); page.Dock = DockStyle.Fill; host.Controls.Add(page);
         crumb.Text = title == "" ? Brand.Name : title; back.Visible = title != ""; crumb.Left = title == "" ? 14 : 150;
     }
-    public void LaunchCeleste() {
+    public void LaunchCeleste(string args = null) {
         var i = Cfg.Current; if (i == null) { MessageBox.Show("No Celeste install found. Open Manage and add one.", Brand.Name); return; }
         var exe = Path.Combine(i.Path, "Celeste.exe"); if (!File.Exists(exe)) { MessageBox.Show("Celeste.exe is missing from " + i.Path, Brand.Name); return; }
-        Process.Start(new ProcessStartInfo(exe) { WorkingDirectory = i.Path, UseShellExecute = true });
+        Process.Start(new ProcessStartInfo(exe) { WorkingDirectory = i.Path, UseShellExecute = true, Arguments = args ?? "" });
         SplashForm.ShowFor("Starting Celeste...", 2500);
         if (Cfg.CloseOnLaunch) Close();
     }
