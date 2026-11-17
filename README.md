@@ -52,4 +52,4 @@ Free code signing provided by [SignPath.io](https://about.signpath.io), certific
 
 ## Credits and licence
 
-MIT licensed, see [LICENSE](LICENSE). Third-party software and services are listed in [NOTICE.md](NOTICE.md). Celeste is made by Maddy Makes Games; this project is fan-made and not affiliated with or endorsed by them, the Everest team, or GameBanana.
+Licensed under the GNU GPL v3, see [LICENSE](LICENSE). Third-party software and services are listed in [NOTICE.md](NOTICE.md). Celeste is made by Maddy Makes Games; this project is fan-made and not affiliated with or endorsed by them, the Everest team, or GameBanana.
