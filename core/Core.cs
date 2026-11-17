@@ -315,6 +315,48 @@ static class News {
     }
 }
 
+// Optional helper mods published as GitHub releases (not in the public Everest database).
+// Same rule as everything else: the release asset must carry a GitHub-published SHA-256, and it is checked before install.
+record ExtraMod(string Name, string Repo, string Blurb);
+static class Extras {
+    public static readonly ExtraMod[] All = {
+        new("KirbyHelperMechanics", "Magedeline/KirbyHelperMechanics", "Kirby-style abilities, enemies and mechanics for maps"),
+        new("PCGHelper", "Magedeline/PCGHelper", "Procedural level generation helpers (with Lönn scripts)"),
+    };
+
+    public static async Task<(string tag, string asset, string url, string sha)> Latest(ExtraMod m) {
+        var j = JsonDocument.Parse(await Net.Http.GetStringAsync($"https://api.github.com/repos/{m.Repo}/releases/latest")).RootElement;
+        var rx = new Regex("^" + Regex.Escape(m.Name) + @"(?:[._-]v?(?<v>\d+(?:\.\d+){0,3}))?\.zip$", RegexOptions.IgnoreCase);
+        // Prefer a versioned asset ("Name.3.0.0.zip") over a plain "Name.zip"; the highest version wins.
+        static Version V(Match mt) { var s = mt.Groups["v"].Value; return mt.Groups["v"].Success && Version.TryParse(s.Contains('.') ? s : s + ".0", out var v) ? v : new Version(0, 0); }
+        var picks = j.GetProperty("assets").EnumerateArray().Select(a => (a, mt: rx.Match(a.GetProperty("name").GetString() ?? ""))).Where(x => x.mt.Success).OrderByDescending(x => V(x.mt)).ToList();
+        if (picks.Count == 0) throw new Exception($"No {m.Name} zip in the latest release.");
+        var b = picks[0].a;
+        string sha = b.TryGetProperty("digest", out var d) && d.GetString() is string s && s.StartsWith("sha256:") ? s.Substring(7) : null;
+        return (j.GetProperty("tag_name").GetString(), b.GetProperty("name").GetString(), b.GetProperty("browser_download_url").GetString(), sha);
+    }
+
+    public static async Task Install(Install inst, ExtraMod m, Config cfg, Action<string> log, IProgress<int> prog) {
+        var existing = Mods.Scan(inst).FirstOrDefault(x => x.Name.Equals(m.Name, StringComparison.OrdinalIgnoreCase));
+        if (existing is { IsDir: true }) { log($"{m.Name} {existing.Version} is already installed as a folder (Mods/{existing.File}); leaving it alone."); return; }
+        var (tag, asset, url, sha) = await Latest(m);
+        if (sha == null) throw new Exception($"The {m.Name} release has no published checksum; refusing to install it.");
+        if (!url.StartsWith($"https://github.com/{m.Repo}/releases/download/", StringComparison.OrdinalIgnoreCase)) throw new Exception("Unexpected download location; refusing.");
+        var tmp = Path.Combine(Path.GetTempPath(), "mz-extra-" + m.Name + ".zip"); log($"Downloading {m.Name} ({tag}, {asset})...");
+        await Net.Download(url, tmp, prog);
+        if (!Net.Sha256(tmp).Equals(sha, StringComparison.OrdinalIgnoreCase)) { File.Delete(tmp); throw new Exception($"{m.Name} download failed its checksum. Nothing was installed."); }
+        log("Verified (SHA-256 published by GitHub).");
+        string yaml; try { yaml = Mods.YamlOfZip(tmp); } catch { yaml = ""; }
+        var (name, ver, deps) = Mods.ParseYaml(yaml);
+        if (!string.Equals(name, m.Name, StringComparison.OrdinalIgnoreCase)) { File.Delete(tmp); throw new Exception($"That zip's everest.yaml doesn't name {m.Name}. Nothing was installed."); }
+        Directory.CreateDirectory(Mods.Dir(inst));
+        if (existing != null && !existing.File.Equals(m.Name + ".zip", StringComparison.OrdinalIgnoreCase)) try { File.Delete(Path.Combine(Mods.Dir(inst), existing.File)); } catch { }
+        File.Move(tmp, Path.Combine(Mods.Dir(inst), m.Name + ".zip"), true); log($"Installed {m.Name} {ver}.");
+        var have = Mods.Scan(inst).Select(x => x.Name).ToHashSet(StringComparer.OrdinalIgnoreCase); var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var dep in deps) if (dep != "Everest" && dep != "EverestCore" && !have.Contains(dep)) await Mods.InstallWithDeps(inst, dep, cfg, log, null, seen);
+    }
+}
+
 // Topo: the CEL map editor (github.com/Magedeline/Topo). Installed per user, launched with CELESTE_DIR pointing at the selected install.
 static class Topo {
     // Topo is a Windows (WinForms) program, so it is only offered on Windows.

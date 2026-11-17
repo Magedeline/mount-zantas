@@ -138,7 +138,24 @@ class DownloadPage : Page {
         var gb = Ui.Btn("Browse GameBanana...", () => App.Show(new GameBananaPage(App), "GameBanana"));
         top.Controls.AddRange(new Control[] { search, sort, go, gb, shown });
         lv.DoubleClick += (_, _) => Install();
-        Controls.Add(lv); Controls.Add(log); Controls.Add(top); log.Log("Loading the mod database..."); _ = LoadList();
+        // Optional extras: helper mods published on GitHub (not in the Everest database). Nothing is installed unless clicked.
+        var extras = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, FlowDirection = FlowDirection.LeftToRight, WrapContents = true };
+        var xl = Ui.Lbl("Optional extras:", 10, true); xl.Margin = new Padding(6, 12, 6, 0); extras.Controls.Add(xl);
+        var tips = new ToolTip();
+        foreach (var m in Extras.All) {
+            var b = Ui.Btn("Get " + m.Name, () => InstallExtra(m)); b.AutoSize = true; b.Margin = new Padding(0, 4, 8, 6); tips.SetToolTip(b, m.Blurb + $" (github.com/{m.Repo})"); extras.Controls.Add(b);
+            extraBtns[m.Name] = b;
+        }
+        Controls.Add(lv); Controls.Add(log); Controls.Add(extras); Controls.Add(top); log.Log("Loading the mod database..."); _ = LoadList(); MarkExtras();
+    }
+    readonly Dictionary<string, Button> extraBtns = new();
+    void MarkExtras() {
+        if (Inst == null) return; var have = Mods.Scan(Inst).GroupBy(x => x.Name, StringComparer.OrdinalIgnoreCase).ToDictionary(g => g.Key, g => g.First().Version, StringComparer.OrdinalIgnoreCase);
+        foreach (var m in Extras.All) if (extraBtns.TryGetValue(m.Name, out var b)) b.Text = have.TryGetValue(m.Name, out var v) ? $"{m.Name} ✓ {v}" : "Get " + m.Name;
+    }
+    void InstallExtra(ExtraMod m) {
+        if (Inst == null) { log.Log("Select a Celeste install first."); return; }
+        var inst = Inst; Run(log, async () => { await Extras.Install(inst, m, App.Cfg, log.Log, log.Prog); log.Log("Done."); Fill(); MarkExtras(); });
     }
     async Task LoadList() { try { db = await ModDb.Get(); log.Log($"{db.Count} mods available. Double-click a mod to install it with the helper mods it needs."); Fill(); } catch (Exception ex) { log.Log("Couldn't load the database: " + ex.Message); } }
     void Fill() {

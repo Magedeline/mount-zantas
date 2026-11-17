@@ -130,6 +130,13 @@ static class Checks {
             Ok(await SelfUpdate.Check("99.0.0") == null, "no update offered when already newest");
             if (r != null) { var exe = Path.Combine(Temp("selfupd"), "MountZantas.exe"); Touch(exe, "old"); var tmp = await SelfUpdate.Download(r, exe); Ok(Net_.Sha256(tmp) == r.Sha256, "the update downloads and matches its checksum"); SelfUpdate.Swap(exe, tmp); Ok(File.Exists(exe + ".old") && new FileInfo(exe).Length > 1000, "swap keeps the old exe aside and installs the new one"); SelfUpdate.Cleanup(exe); Ok(!File.Exists(exe + ".old"), "cleanup removes the old exe"); }
         });
+        await Net("extras", async () => {
+            foreach (var m in Extras.All) { var l = await Extras.Latest(m); Ok(l.sha is { Length: 64 } && l.asset.StartsWith(m.Name), $"{m.Name} {l.tag}: {l.asset} has a published SHA-256"); }
+            var pcg = Extras.All.First(m => m.Name == "PCGHelper"); var game = Temp("xgame"); var inst = new Install { Name = "x", Path = game }; var mods = Path.Combine(game, "Mods"); Directory.CreateDirectory(mods);
+            await Extras.Install(inst, pcg, new Config(), _ => { }, null); Ok(Mods.Scan(inst).Any(x => x.Name == "PCGHelper" && !x.IsDir && x.File == "PCGHelper.zip"), "PCGHelper installs as a verified zip into Mods");
+            var g2 = Temp("xgame2"); var i2 = new Install { Name = "y", Path = g2 }; var dev = Path.Combine(g2, "Mods", "PCGHelper"); Directory.CreateDirectory(dev); File.WriteAllText(Path.Combine(dev, "everest.yaml"), "- Name: PCGHelper\n  Version: 9.9.9\n");
+            await Extras.Install(i2, pcg, new Config(), _ => { }, null); Ok(!File.Exists(Path.Combine(g2, "Mods", "PCGHelper.zip")), "a folder (dev) copy of the mod is left alone, no duplicate zip");
+        });
         await Net("topo", async () => { Ok(Topo.Supported == Platform.Windows, "Topo is offered on Windows only"); if (Topo.Supported) { var t = await Topo.Latest(false); Ok(t.sha != null, "Topo release has a checksum"); } else { bool refused = false; try { await Topo.Install(false, _ => { }, null); } catch (Exception ex) { refused = ex.Message.Contains("Windows"); } Ok(refused, "Topo install is refused with a clear message off Windows"); } });
 
         Console.WriteLine($"\n{pass} passed, {fail} failed on {Platform.Name}"); foreach (var f in failures) Console.WriteLine("  FAILED: " + f);
