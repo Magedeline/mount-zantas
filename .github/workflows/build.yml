@@ -40,3 +40,46 @@ jobs:
           path: |
             dist/MountZantas.exe
             dist/SHA256SUMS.txt
+
+  # The cross-platform (Avalonia) app. Built on the matching OS so the macOS binaries get an ad-hoc signature,
+  # which Apple Silicon requires before it will run arm64 code.
+  desktop-app:
+    needs: core-checks
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-latest, rid: linux-x64 }
+          - { os: macos-latest, rid: osx-x64 }
+          - { os: macos-latest, rid: osx-arm64 }
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Publish
+        run: dotnet publish desktop/MountZantas.Desktop.csproj -c Release -r ${{ matrix.rid }} -p:DebugType=none -o out
+      - name: Package (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          mkdir -p "MountZantas-${{ matrix.rid }}" && cp out/MountZantas "MountZantas-${{ matrix.rid }}/" && chmod +x "MountZantas-${{ matrix.rid }}/MountZantas"
+          tar -czf "MountZantas-${{ matrix.rid }}.tar.gz" "MountZantas-${{ matrix.rid }}"
+          sha256sum "MountZantas-${{ matrix.rid }}.tar.gz" > "SHA256SUMS-${{ matrix.rid }}.txt"
+      - name: Package (macOS app bundle, ad-hoc signed)
+        if: runner.os == 'macOS'
+        run: |
+          APP="Mount Zantas.app"; mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
+          cp out/MountZantas "$APP/Contents/MacOS/" && chmod +x "$APP/Contents/MacOS/MountZantas"
+          V=$(sed -n 's:.*<Version>\(.*\)</Version>.*:\1:p' desktop/MountZantas.Desktop.csproj)
+          /usr/libexec/PlistBuddy -c "Add :CFBundleName string Mount Zantas" -c "Add :CFBundleExecutable string MountZantas" -c "Add :CFBundleIdentifier string io.github.magedeline.mountzantas" \
+            -c "Add :CFBundlePackageType string APPL" -c "Add :CFBundleShortVersionString string $V" -c "Add :CFBundleVersion string $V" -c "Add :LSMinimumSystemVersion string 10.15" -c "Add :NSHighResolutionCapable bool true" "$APP/Contents/Info.plist"
+          codesign --force --deep --sign - "$APP"
+          ditto -c -k --keepParent "$APP" "MountZantas-${{ matrix.rid }}.zip"
+          shasum -a 256 "MountZantas-${{ matrix.rid }}.zip" > "SHA256SUMS-${{ matrix.rid }}.txt"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MountZantas-${{ matrix.rid }}
+          path: |
+            MountZantas-${{ matrix.rid }}.*
+            SHA256SUMS-${{ matrix.rid }}.txt
