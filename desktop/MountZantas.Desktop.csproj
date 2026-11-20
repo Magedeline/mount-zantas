@@ -1,0 +1,35 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- The cross-platform app (Avalonia) for Linux and macOS, on the same core as the Windows app. -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>MountZantas</AssemblyName>
+    <RootNamespace>MountZantas</RootNamespace>
+    <Company>Magedeline</Company>
+    <Product>Mount Zantas</Product>
+    <AssemblyTitle>Mount Zantas</AssemblyTitle>
+    <Description>Launcher and mod manager for Celeste (uses the Everest mod loader).</Description>
+    <Version>0.7.0</Version>
+    <Copyright>Copyright (c) Magedeline</Copyright>
+    <ApplicationIcon>..\app.ico</ApplicationIcon>
+    <DebugType>none</DebugType>
+    <BuiltInComInteropSupport>false</BuiltInComInteropSupport>
+    <PublishSingleFile>true</PublishSingleFile>
+    <SelfContained>true</SelfContained>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+    <!-- No libicu needed at run time (some Linux systems, e.g. SteamOS, don't ship it). -->
+    <InvariantGlobalization>true</InvariantGlobalization>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Avalonia" Version="11.2.3" />
+    <PackageReference Include="Avalonia.Desktop" Version="11.2.3" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="11.2.3" />
+    <PackageReference Include="Avalonia.Fonts.Inter" Version="11.2.3" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\core\MountZantas.Core.csproj" />
+  </ItemGroup>
+</Project>

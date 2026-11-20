@@ -27,6 +27,8 @@ A launcher and mod manager for [Celeste](https://www.celestegame.com/). It runs 
 
 Windows 10/11, x64. The exe is **not code-signed yet**, so Windows SmartScreen may show an "unknown publisher" warning (see [Code signing](#code-signing)).
 
+**Linux and macOS (preview, 0.7.0):** the same app built with Avalonia, from [itch.io](https://maggystudio1245.itch.io/mount-zantas) or the release page. Linux: extract and run `./MountZantas`. macOS: drag `Mount Zantas.app` to Applications, then right-click > Open the first time (it isn't notarized). These builds haven't been tested on real Linux or Mac hardware yet; see [docs/PLATFORMS.md](docs/PLATFORMS.md).
+
 ## Safety
 
 - Everything it installs comes from an official source over HTTPS and is verified against a published checksum before it is used. If a checksum doesn't match, nothing is installed. The one exception: Everest beta/dev builds (hosted on Azure DevOps) have no published checksum, so installing one needs an explicit "Allow unverified builds" tick-box and the log says so.
