@@ -27,12 +27,14 @@ public class ZantasLoaderModule : EverestModule {
     public override void Load() {
         On.Celeste.OuiTitleScreen.ctor += OnTitleScreenCreated;
         On.Celeste.OuiTitleScreen.Render += OnTitleScreenRender;
+        OuiCreditsPatch.Load();
         Logger.Log(LogLevel.Info, "ZantasLoader", $"Zantas Loader {Metadata.VersionString} on Everest {Everest.VersionString}");
     }
 
     public override void Unload() {
         On.Celeste.OuiTitleScreen.ctor -= OnTitleScreenCreated;
         On.Celeste.OuiTitleScreen.Render -= OnTitleScreenRender;
+        OuiCreditsPatch.Unload();
     }
 
     public override void Initialize() {

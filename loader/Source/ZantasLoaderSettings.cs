@@ -8,4 +8,7 @@ public class ZantasLoaderSettings : EverestModuleSettings {
     public bool BrandWindowTitle { get; set; } = true;
 
     public bool WriteSessionReport { get; set; } = true;
+
+    // What the credits roll shows (see OuiCreditsPatch).
+    public CreditsMode Credits { get; set; } = CreditsMode.AddZantas;
 }
