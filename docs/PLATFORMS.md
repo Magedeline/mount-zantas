@@ -11,7 +11,7 @@ Mount Zantas is split in two so it can reach Linux and macOS:
 
 | | Windows | Linux | macOS |
 |---|---|---|---|
-| Full app (window, buttons, pages) | yes (WinForms) | yes (Avalonia, 0.7.0), **not yet run on real hardware** | yes (Avalonia, 0.7.0), **not yet run on real hardware** |
+| Full app (window, buttons, pages) | yes (WinForms) | yes (Avalonia, 0.8.0), **not yet run on real hardware** | yes (Avalonia, 0.8.0), **not yet run on real hardware** |
 | Self-update | replaces itself | tells you a new version is out | tells you a new version is out |
 | Core logic | tested in CI | tested in CI | tested in CI |
 | Game detection | Steam, Epic, GOG, itch, folders | Steam (incl. Flatpak, extra libraries), itch, folders | Steam, itch, /Applications, folders |
