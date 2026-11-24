@@ -7,6 +7,7 @@ A launcher and mod manager for [Celeste](https://www.celestegame.com/). It runs 
 ## Features
 
 - **Installations:** finds Celeste from Steam, Epic, GOG, the itch app, or any folder you pick.
+- **Zantas Loader:** Mount Zantas's own loader layer, an Everest core mod installed together with Everest, so every Everest mod still works. It shows Zantas Loader on the title screen, reports back which mods loaded and which failed (Everest page > Load report), and lets you play a mod preset for one run without changing your mod list (Mod presets > Play with).
 - **Everest:** install or remove any stable, beta or dev build. Downloads are checked against the SHA-256 GitHub publishes. Removing Everest restores your original game files.
 - **Mod manager:** enable/disable mods, favorites, search and filters, presets, sort, bulk actions, update-all, delete to the Recycle Bin. It warns about missing or disabled required mods and can fix them in one click.
 - **Download Mods:** search the public Everest mod database and install a mod with the helper mods it needs. Every download is checked against the database checksum.
@@ -43,6 +44,8 @@ Needs the .NET 8 SDK on Windows.
 ```
 dotnet publish -c Release -o dist
 ```
+
+The in-game Zantas Loader is in `loader/`. It compiles against an Everest install of Celeste, so CI can't build it: after changing it, run `./loader/build.ps1` (optionally `-Celeste <path>`) and commit the new `loader/ZantasLoader.zip`, which the app embeds.
 
 Settings, caches and downloaded tools live in `%LOCALAPPDATA%\MountZantas`. Set the environment variable `MOUNTZANTAS_DATA` to use another folder (handy for testing against a scratch Celeste copy).
 

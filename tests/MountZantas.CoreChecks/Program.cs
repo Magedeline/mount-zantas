@@ -242,6 +242,43 @@ static class Checks {
                 "uninstall restores original files, removes Everest, keeps Mods");
         }
 
+        // ----- Zantas Loader: install, load report, preset launch lists -----
+        {
+            var game = FakeCeleste(Temp("zantas"));
+            var inst = new Install { Path = game };
+            var mods = Path.Combine(game, "Mods");
+            Touch(Path.Combine(mods, "blacklist.txt"), "ZantasLoader.zip\nOffMod.zip\n");
+            Touch(Path.Combine(mods, "OnMod", "everest.yaml"), "- Name: OnMod\n  Version: 1.0.0\n");
+            Touch(Path.Combine(mods, "OffMod", "everest.yaml"), "- Name: OffMod\n  Version: 1.0.0\n");
+
+            Ok(ZantasLoader.IsBundled, "Zantas Loader zip is embedded in the core");
+            Ok(ZantasLoader.BundledVersion() != null, "bundled Zantas Loader has a version in its everest.yaml");
+            Ok(ZantasLoader.InstalledVersion(inst) == null && ZantasLoader.NeedsInstall(inst), "fresh install needs Zantas Loader");
+            ZantasLoader.Install(inst, _ => { });
+            Ok(ZantasLoader.InstalledVersion(inst) == ZantasLoader.BundledVersion(), "Zantas Loader installed with the bundled version");
+            Ok(!ZantasLoader.NeedsInstall(inst), "no reinstall needed right after installing");
+            Ok(!Mods.Disabled(inst).Contains("ZantasLoader.zip") && Mods.Disabled(inst).Contains("OffMod.zip"), "install takes Zantas Loader off the blacklist and keeps the rest");
+
+            Ok(ZantasLoader.ReadSession(inst) == null, "no load report before the game has run");
+            Touch(Path.Combine(game, "zantas-session.json"),
+                "{\"Loader\":\"0.1.0\",\"Everest\":\"1.5000.0\",\"Profile\":\"Speedrun\",\"Started\":\"2026-11-23T20:00:00\","
+                + "\"Mods\":[{\"Name\":\"OnMod\",\"Version\":\"1.0.0\",\"File\":\"OnMod\",\"Code\":false}],\"Problems\":[\"X: not loaded\"]}");
+            var s = ZantasLoader.ReadSession(inst);
+            Ok(s != null && s.Profile == "Speedrun" && s.Mods.Count == 1 && s.Problems.Count == 1, "load report from the game is read");
+            Ok(ZantasLoader.Summary(s).Contains("1 mods loaded") && ZantasLoader.Summary(s).Contains("1 problem"), "load report summary");
+
+            var args = ZantasLoader.PrepareProfile(inst, "Speedrun", new[] { "OnMod", "ZantasLoader.zip" });
+            var off = File.ReadAllLines(Path.Combine(mods, ZantasLoader.ProfileOffFile));
+            var on = File.ReadAllLines(Path.Combine(mods, ZantasLoader.ProfileOnFile));
+            Ok(args == "--blacklist zantas-profile-off.txt --whitelist zantas-profile-on.txt", "preset launch arguments");
+            Ok(off[0] == "# Zantas profile: Speedrun" && off.Contains("OnMod") && !off.Contains("ZantasLoader.zip"), "preset off-list names the preset and never turns the loader off");
+            Ok(on.Contains("OffMod") && on.Contains("ZantasLoader.zip") && !on.Contains("OnMod"), "preset on-list re-enables blacklisted mods the preset wants");
+            Ok(File.ReadAllText(Path.Combine(mods, "blacklist.txt")).Contains("OffMod.zip"), "preset launch leaves blacklist.txt alone");
+
+            ZantasLoader.Remove(inst, _ => { });
+            Ok(ZantasLoader.InstalledVersion(inst) == null, "Zantas Loader can be removed");
+        }
+
         // ----- map reader: build a tiny .bin, read, render, and find it inside a zip -----
         {
             var bin = TinyMap();

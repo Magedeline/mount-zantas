@@ -28,7 +28,7 @@
   <ItemGroup>
     <!-- The portable logic lives in core/ (and is checked on Linux and macOS in CI); this project is the Windows UI on top of it. -->
     <ProjectReference Include="core\MountZantas.Core.csproj" />
-    <Compile Remove="core\**;tests\**;desktop\**" />
+    <Compile Remove="core\**;tests\**;desktop\**;loader\**" />
   </ItemGroup>
 </Project>
 

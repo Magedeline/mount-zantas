@@ -356,6 +356,10 @@ static class EverestSvc {
         if (!File.Exists(Path.Combine(inst.Path, "Celeste.Mod.mm.dll"))) throw new Exception("The patcher finished but Everest is not present; the install did not complete.");
         File.WriteAllText(Path.Combine(inst.Path, "update-build.txt"), b.Version.ToString());   // the same marker Olympus writes, so the build number is shown correctly
         log("Everest installed (build " + b.Version + ").");
+        // Mount Zantas's own loader layer goes in with Everest (or is updated if this program has a newer one).
+        if (ZantasLoader.NeedsInstall(inst)) {
+            ZantasLoader.Install(inst, log);
+        }
     }
 
     // Everest keeps the untouched game files in "orig"; restoring them and removing Celeste.Mod.mm.dll returns to vanilla.

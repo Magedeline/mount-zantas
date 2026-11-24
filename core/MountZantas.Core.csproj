@@ -10,4 +10,8 @@
   <ItemGroup>
     <PackageReference Include="System.IO.Hashing" Version="8.0.0" />
   </ItemGroup>
+  <ItemGroup>
+    <!-- The in-game Zantas Loader (built by loader/build.ps1), installed into Mods/ by ZantasLoader.Install. -->
+    <EmbeddedResource Include="..\loader\ZantasLoader.zip" LogicalName="ZantasLoader.zip" Condition="Exists('..\loader\ZantasLoader.zip')" />
+  </ItemGroup>
 </Project>

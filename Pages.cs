@@ -297,11 +297,13 @@ class EverestPage : Page {
     readonly LogBox log = new();
     readonly CheckBox unverified = Ui.Check("Allow unverified builds (no published checksum)");
     readonly Label cur = Ui.Lbl("", 11, false, Brand.Dim);
+    readonly Label loader = Ui.Lbl("", 10, false, Brand.Dim);
     List<EverestBuild> builds = new();
     public EverestPage(MainForm app) : base(app) {
-        var top = new FlowLayoutPanel { Dock = DockStyle.Top, Height = 80, FlowDirection = FlowDirection.TopDown };
+        var top = new FlowLayoutPanel { Dock = DockStyle.Top, Height = 104, FlowDirection = FlowDirection.TopDown };
         top.Controls.Add(Ui.Lbl("Install Everest", 18, true));
         top.Controls.Add(cur);
+        top.Controls.Add(loader);
         var bar = new FlowLayoutPanel {
             Dock = DockStyle.Bottom,
             Height = 46,
@@ -310,6 +312,8 @@ class EverestPage : Page {
         bar.Controls.Add(Ui.Btn("Install selected version", Install));
         bar.Controls.Add(Ui.Btn("Uninstall", Uninstall));
         bar.Controls.Add(Ui.Btn("Reload versions list", () => _ = LoadList()));
+        bar.Controls.Add(Ui.Btn("Install Zantas Loader", InstallLoader));
+        bar.Controls.Add(Ui.Btn("Load report", ShowReport));
         bar.Controls.Add(unverified);
         foreach (var h in new[] { ("Build", 90), ("Branch", 80), ("Date", 150), ("Author", 150), ("Description", 600) }) lv.Columns.Add(h.Item1, h.Item2);
         Ui.DarkList(lv);
@@ -323,6 +327,50 @@ class EverestPage : Page {
     void Refresh2() {
         var i = Inst;
         cur.Text = i == null ? "No Celeste install selected." : $"{i.Name}: " + (EverestSvc.EverestVersion(i) is string v ? "Everest " + v : "Everest not installed");
+        loader.Text = LoaderText(i);
+    }
+
+    // One line about Zantas Loader: installed version and the last load report.
+    static string LoaderText(Install i) {
+        if (i == null) {
+            return "";
+        }
+        var have = ZantasLoader.InstalledVersion(i);
+        if (have == null) {
+            return "Zantas Loader: not installed (it is added automatically when you install Everest).";
+        }
+        var text = "Zantas Loader " + have + ". " + ZantasLoader.Summary(ZantasLoader.ReadSession(i));
+        if (ZantasLoader.NeedsInstall(i)) {
+            text += " Update available: " + ZantasLoader.BundledVersion() + ".";
+        }
+        return text;
+    }
+
+    void InstallLoader() {
+        if (Inst == null) {
+            log.Log("Select a Celeste install first.");
+            return;
+        }
+        try {
+            ZantasLoader.Install(Inst, log.Log);
+            Refresh2();
+        } catch (Exception ex) { log.Log("ERROR: " + ex.Message); }
+    }
+
+    // Writes the last load report from the game into the log box.
+    void ShowReport() {
+        if (Inst == null) {
+            return;
+        }
+        var s = ZantasLoader.ReadSession(Inst);
+        log.Log(ZantasLoader.Summary(s));
+        if (s == null) {
+            return;
+        }
+        log.Log($"Zantas Loader {s.Loader} on Everest {s.Everest}.");
+        foreach (var problem in s.Problems) {
+            log.Log("PROBLEM: " + problem);
+        }
     }
     async Task LoadList() {
         try {

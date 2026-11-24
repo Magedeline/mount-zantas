@@ -307,6 +307,14 @@ class ModsPage : Page {
                 Bind();
                 log.Log($"Applied \"{name}\". Restart Celeste for it to take effect.");
             });
+            // Starts Celeste with this preset for one run; the mod list on disk stays as it is.
+            menu.Items.Add($"Play with: {name}", null, (_, _) => {
+                try {
+                    var args = ZantasLoader.PrepareProfile(Inst, name, kv.Value);
+                    log.Log($"Starting Celeste with preset \"{name}\" (your mod list is unchanged).");
+                    App.LaunchCeleste(args);
+                } catch (Exception ex) { log.Log("ERROR: " + ex.Message); }
+            });
             menu.Items.Add($"Delete: {name}", null, (_, _) => {
                 App.Cfg.Presets.Remove(name);
                 App.Cfg.Save();
