@@ -1,4 +1,4 @@
-# Builds Zantas Loader and packs loader/ZantasLoader.zip (everest.yaml + ZantasLoader.dll + Dialog).
+# Builds Zantas Loader and packs loader/ZantasLoader.zip (everest.yaml + ZantasLoader.dll + Dialog + Graphics).
 # Mount Zantas embeds that zip and installs it into Mods/ next to Everest, so run this before publishing the app
 # whenever the loader changes, and commit the new zip.
 #
@@ -29,6 +29,7 @@ New-Item -ItemType Directory -Force "$stage/Dialog" | Out-Null
 Copy-Item "$here/everest.yaml" $stage
 Copy-Item "$here/out/bin/ZantasLoader.dll" $stage
 Copy-Item "$here/Dialog/English.txt" "$stage/Dialog"
+Copy-Item "$here/Graphics" $stage -Recurse
 
 $zip = "$here/ZantasLoader.zip"
 if (Test-Path $zip) {

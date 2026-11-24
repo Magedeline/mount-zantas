@@ -70,6 +70,13 @@ static class Program {
             bmp.Save(args[di + 2], System.Drawing.Imaging.ImageFormat.Png);
             return 0;
         }
+        // MountZantas.exe --make-mark out.png 128  saves the Zantas mark as a PNG (used for Zantas Loader's title screen logo).
+        int mm = Array.IndexOf(args, "--make-mark");
+        if (mm >= 0 && args.Length > mm + 2) {
+            using var mark = GameSplash.Mark(int.Parse(args[mm + 2]));
+            mark.Save(args[mm + 1], System.Drawing.Imaging.ImageFormat.Png);
+            return 0;
+        }
         int ii = Array.IndexOf(args, "--make-icon");
         if (ii >= 0 && args.Length > ii + 1) {
             MakeIcon(args[ii + 1]);
@@ -445,7 +452,7 @@ class MainForm : Form {
                 if (manual) say("Updating only works from the installed MountZantas.exe.");
                 return;
             }
-            var cur = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "0.0.0";
+            var cur = SelfUpdate.AppVersion;
             var r = await SelfUpdate.Check(cur);
             if (r == null) {
                 if (manual) say($"You have the latest version ({cur}).");

@@ -1,5 +1,6 @@
 using System;
 using FMOD.Studio;
+using Microsoft.Xna.Framework;
 using Monocle;
 
 namespace Celeste.Mod.ZantasLoader;
@@ -25,11 +26,13 @@ public class ZantasLoaderModule : EverestModule {
 
     public override void Load() {
         On.Celeste.OuiTitleScreen.ctor += OnTitleScreenCreated;
+        On.Celeste.OuiTitleScreen.Render += OnTitleScreenRender;
         Logger.Log(LogLevel.Info, "ZantasLoader", $"Zantas Loader {Metadata.VersionString} on Everest {Everest.VersionString}");
     }
 
     public override void Unload() {
         On.Celeste.OuiTitleScreen.ctor -= OnTitleScreenCreated;
+        On.Celeste.OuiTitleScreen.Render -= OnTitleScreenRender;
     }
 
     public override void Initialize() {
@@ -65,6 +68,27 @@ public class ZantasLoaderModule : EverestModule {
             line += $" (preset: {profile})";
         }
         self.version += line;
+    }
+
+    // The Zantas mark (Graphics/Atlases/Gui/zantasloader/mark.png): a mountain with a gear and a star in its middle.
+    const string MarkTexture = "zantasloader/mark";
+    // Drawn at half size: the PNG is 128 px, so the mark is 64 px on the 1920 x 1080 screen.
+    const float MarkScale = 0.5f;
+
+    // Draws the Zantas mark just above the version lines in the bottom-left corner.
+    // The title screen draws those lines with their bottom at textY, at half font size, growing upwards,
+    // so the mark goes above the whole block and slides in and out with it.
+    static void OnTitleScreenRender(On.Celeste.OuiTitleScreen.orig_Render orig, OuiTitleScreen self) {
+        orig(self);
+        if (!Settings.ShowOnTitleScreen) {
+            return;
+        }
+        if (!GFX.Gui.Has(MarkTexture)) {
+            return;
+        }
+        float textHeight = ActiveFont.Measure(self.version).Y * 0.5f;
+        var position = new Vector2(80f, self.textY - textHeight - 6f);
+        GFX.Gui[MarkTexture].DrawJustified(position, new Vector2(0f, 1f), Color.White * self.alpha, MarkScale);
     }
 
     static void ApplyWindowTitle() {
