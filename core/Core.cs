@@ -131,10 +131,30 @@ static class ModDb {
         }
         return cache = d;
     }
-    public static bool Newer(string have, string latest) => Version.TryParse(Clean(have), out var a) && Version.TryParse(Clean(latest), out var b) && b > a;
+    public static bool Newer(string have, string latest) {
+        if (!Version.TryParse(Clean(have), out var a)) {
+            return false;
+        }
+        if (!Version.TryParse(Clean(latest), out var b)) {
+            return false;
+        }
+        if (b != a) {
+            return b > a;
+        }
+        // Same numbers: a letter right after them marks a later build of that version (0.8.0 < 0.8.0a < 0.8.0b).
+        return Letter(latest) > Letter(have);
+    }
     static string Clean(string v) {
         var m = Regex.Match(v ?? "", @"\d+(\.\d+){0,3}");
         return m.Success ? m.Value : "";
+    }
+    // The letter that ends a version such as "0.8.0b", or '\0' when there is none (so "0.8.0-beta" has none).
+    static char Letter(string v) {
+        var m = Regex.Match(v ?? "", @"\d+(\.\d+){0,3}([a-zA-Z])$");
+        if (!m.Success) {
+            return '\0';
+        }
+        return char.ToLowerInvariant(m.Groups[2].Value[0]);
     }
 }
 

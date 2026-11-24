@@ -561,7 +561,7 @@ class OptionsPage : Page {
         d3.Margin = new Padding(0, 0, 0, 4);
         Put(Ui.Section("Folders", d1, d2, d3), 1, 2);
 
-        var ver = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version;
+        var ver = SelfUpdate.AppVersion;
         var about = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.LeftToRight };
         about.Controls.Add(new PictureBox {
             Image = Brand.Logo(56),
@@ -569,7 +569,7 @@ class OptionsPage : Page {
             Width = 56,
             Height = 56
         });
-        about.Controls.Add(Ui.Lbl($"{Brand.Name} {ver?.ToString(3)}\r\nA Celeste launcher and mod manager that uses the Everest mod loader (MIT).\r\nCeleste is made by Maddy Makes Games. This launcher is fan-made.", 9.5f, false, Brand.Dim));
+        about.Controls.Add(Ui.Lbl($"{Brand.Name} {ver}\r\nA Celeste launcher and mod manager that uses the Everest mod loader (MIT).\r\nCeleste is made by Maddy Makes Games. This launcher is fan-made.", 9.5f, false, Brand.Dim));
         Put(Ui.Section("About", about), 0, 3, 2);
         Controls.Add(f);
         Controls.Add(log);

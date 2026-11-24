@@ -87,7 +87,13 @@ static class Checks {
         Ok(
             ModDb.Newer("1.0.0", "1.0.1")
             && !ModDb.Newer("1.2.0", "1.1.9")
-            && ModDb.Newer("1.9", "1.10"),
+            && ModDb.Newer("1.9", "1.10")
+            && ModDb.Newer("0.8.0", "0.8.0b")
+            && ModDb.Newer("0.8.0a", "0.8.0b")
+            && !ModDb.Newer("0.8.0b", "0.8.0")
+            && !ModDb.Newer("0.8.0b", "0.8.0b")
+            && ModDb.Newer("0.8.0b", "0.8.1")
+            && !ModDb.Newer("1.0.0-beta", "1.0.0"),
             "version compare");
         {
             var (n, v, d) = Mods.ParseYaml("- Name: Foo\n  Version: 1.2.3\n  Dependencies:\n    - Name: Everest\n      Version: 1.0\n    - Name: BarHelper\n      Version: 2\n  OptionalDependencies:\n    - Name: Opt\n");

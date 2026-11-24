@@ -16,7 +16,7 @@ class MainWindow : Window {
     readonly ContentControl host = new();
     readonly TextBlock crumb = Ui.Lbl(Brand.Name, 11, true);
     readonly Button back;
-    public static string Version => System.Reflection.Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "0.0.0";
+    public static string Version => SelfUpdate.AppVersion;
 
     public MainWindow() {
         try { App.SetAccent(Color.Parse(Cfg.Accent)); } catch { }

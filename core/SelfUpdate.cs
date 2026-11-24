@@ -7,6 +7,20 @@ namespace MountZantas;
 static class SelfUpdate {
     public const string Repo = "Magedeline/mount-zantas";
 
+    // This build's version as people see it, such as "0.8.0b" (the <InformationalVersion> in the .csproj).
+    public static string AppVersion {
+        get {
+            var assembly = System.Reflection.Assembly.GetEntryAssembly();
+            var attribute = (System.Reflection.AssemblyInformationalVersionAttribute)Attribute.GetCustomAttribute(
+                assembly,
+                typeof(System.Reflection.AssemblyInformationalVersionAttribute));
+            if (attribute != null) {
+                return attribute.InformationalVersion.Split('+')[0];
+            }
+            return assembly.GetName().Version?.ToString(3) ?? "0.0.0";
+        }
+    }
+
     public record Release(string Tag, string Version, string Url, string Sha256, string Name);
 
     // Returns the latest release if it is newer than `current`, else null. Windows builds use MountZantas.exe.
