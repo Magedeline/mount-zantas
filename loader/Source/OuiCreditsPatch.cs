@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using Monocle;
 
 namespace Celeste.Mod.ZantasLoader;
 
@@ -12,10 +13,10 @@ public enum CreditsMode {
     ReplaceWithZantas,
 }
 
-// OuiCreditsPatch: changes the credits roll.
-// The game builds every credits roll (the Credits button on the main menu and the end of chapter 7)
+// OuiCreditsPatch: changes the credits screen behind the "Credits" button on the main menu (OuiCredits).
+// The game builds every credits roll (that screen and the end of chapter 7)
 // by calling Credits.CreateCredits, which returns a list of "nodes" (a title, a role, a list of names...).
-// We hook that one method, so both places get our credits.
+// We hook that method and only change the list when we are on the main menu.
 public static class OuiCreditsPatch {
 
     // ---- Edit the Mount Zantas credits here. ----
@@ -52,6 +53,12 @@ public static class OuiCreditsPatch {
     // the value really is a List<Credits.CreditNode>, so we cast it back.
     static object OnCreateCredits(On.Celeste.Credits.orig_CreateCredits orig, bool title, bool polaroids) {
         var original = (List<Credits.CreditNode>) orig(title, polaroids);
+
+        // The main-menu Credits screen (OuiCredits) runs in the Overworld scene.
+        // The chapter 7 ending runs in a Level, so it keeps the game's own credits.
+        if (Engine.Scene is not Overworld) {
+            return original;
+        }
 
         CreditsMode mode = ZantasLoaderModule.Settings.Credits;
         if (mode == CreditsMode.AddZantas) {

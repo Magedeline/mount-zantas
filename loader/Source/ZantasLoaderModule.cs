@@ -1,4 +1,6 @@
 using System;
+using System.Linq;
+using Celeste.Mod.UI;
 using FMOD.Studio;
 using Microsoft.Xna.Framework;
 using Monocle;
@@ -9,7 +11,10 @@ namespace Celeste.Mod.ZantasLoader;
 // Everest still does the real loading (so every Everest mod works); this module
 //   - shows "Zantas Loader" and the active Mount Zantas preset on the title screen and in the window title,
 //   - reports back to Mount Zantas which mods loaded and which failed (zantas-session.json),
-//   - adds a "Zantas Loader" page to Mod Options with that same report.
+//   - adds a "Zantas Loader" page to Mod Options with that same report and in-game mod profiles,
+//   - changes the main-menu credits (OuiCreditsPatch),
+//   - adds zantas_* debug console commands: mods, profiles, load times and hook conflicts.
+// The profiles, load times and conflict commands used to be a separate mod, Cairn, and were merged in here.
 public class ZantasLoaderModule : EverestModule {
     public static ZantasLoaderModule Instance { get; private set; }
 
@@ -107,7 +112,12 @@ public class ZantasLoaderModule : EverestModule {
     public override void CreateModMenuSection(TextMenu menu, bool inGame, EventInstance snapshot) {
         // The on/off switches from ZantasLoaderSettings.
         base.CreateModMenuSection(menu, inGame, snapshot);
+        AddReportSection(menu);
+        AddProfilesSection(menu, inGame);
+    }
 
+    // The load report: which preset is active, how many mods loaded, and what failed.
+    static void AddReportSection(TextMenu menu) {
         SessionReport report = LastReport;
         if (report == null) {
             return;
@@ -123,6 +133,68 @@ public class ZantasLoaderModule : EverestModule {
         foreach (string problem in report.Problems) {
             menu.Add(new TextMenu.SubHeader(problem, false));
         }
+    }
+
+    // In-game mod profiles (from Cairn): save the set of disabled mods under a name, and apply it later.
+    static void AddProfilesSection(TextMenu menu, bool inGame) {
+        int disabledNow = Profiles.CurrentDisabled().Count;
+        menu.Add(new TextMenu.SubHeader($"Mod profiles ({disabledNow} mods disabled right now)", false));
+
+        if (inGame) {
+            // Applying restarts the game, and naming a profile needs the main menu's text entry.
+            menu.Add(new TextMenu.SubHeader("Profiles can be saved and applied from the main menu", false));
+            return;
+        }
+
+        foreach (string name in Profiles.List()) {
+            string profile = name;
+            int count = Profiles.Read(profile).Count;
+            string label;
+            if (profile == Profiles.PreviousName) {
+                label = $"Undo last apply ({count} mods disabled)";
+            } else {
+                label = $"Apply \"{profile}\" ({count} mods disabled)";
+            }
+            menu.Add(new TextMenu.Button(label).Pressed(() => {
+                if (Profiles.Apply(profile)) {
+                    Everest.QuickFullRestart();
+                }
+            }));
+        }
+
+        menu.Add(new TextMenu.Button("Save current mods as a new profile").Pressed(() => {
+            Audio.Play(SFX.ui_main_savefile_rename_start);
+            // The text entry reports every keystroke; only save once the name is confirmed.
+            string typed = "";
+            menu.SceneAs<Overworld>().Goto<OuiModOptionString>().Init<OuiModOptions>(
+                "",
+                value => typed = value,
+                confirmed => {
+                    if (confirmed) {
+                        Profiles.Save(typed);
+                    }
+                },
+                20,
+                1
+            );
+        }));
+
+        menu.Add(new TextMenu.SubHeader("Applying a profile restarts the game. Use Toggle Mods to change which mods are on.", false));
+    }
+
+    // Debug console (~): lists every loaded mod with its version; code mods are marked [dll].
+    [Command("zantas_mods", "Zantas Loader: list loaded mods and versions")]
+    public static void CmdMods() {
+        var modules = Everest.Modules.OrderBy(m => m.Metadata?.Name, StringComparer.OrdinalIgnoreCase);
+        foreach (EverestModule module in modules) {
+            EverestModuleMetadata meta = module.Metadata;
+            if (meta == null) {
+                continue;
+            }
+            string kind = string.IsNullOrEmpty(meta.DLL) ? "     " : "[dll]";
+            Engine.Commands.Log($"{kind} {meta.Name} {meta.VersionString}");
+        }
+        Engine.Commands.Log($"{Everest.Modules.Count} modules loaded");
     }
 
     // Called by Everest when a setting on our Mod Options page changes.
