@@ -1,0 +1,35 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+        Zantas Loader: the in-game half of Mount Zantas. It is an Everest core mod, so every Everest mod keeps working.
+        Building it needs an Everest (core, .NET 8) install of Celeste, because it compiles against Celeste.dll.
+        Point CelestePrefix at that install, or keep the default (the "celeste" folder next to this repository).
+        build.ps1 builds it and packs loader/ZantasLoader.zip, which Mount Zantas embeds and installs.
+    -->
+    <PropertyGroup>
+        <TargetFramework>net8.0</TargetFramework>
+        <AssemblyName>ZantasLoader</AssemblyName>
+        <RootNamespace>Celeste.Mod.ZantasLoader</RootNamespace>
+        <LangVersion>latest</LangVersion>
+        <Nullable>disable</Nullable>
+        <ImplicitUsings>disable</ImplicitUsings>
+        <Version>0.3.0</Version>
+        <CelestePrefix Condition="'$(CelestePrefix)' == ''">../../celeste</CelestePrefix>
+        <FnaPath Condition="'$(FnaPath)' == '' And Exists('$(CelestePrefix)/everest-lib/FNA.dll')">$(CelestePrefix)/everest-lib/FNA.dll</FnaPath>
+        <FnaPath Condition="'$(FnaPath)' == ''">$(CelestePrefix)/FNA.dll</FnaPath>
+    </PropertyGroup>
+
+    <!-- Everything below is provided by the game at run time, so none of it is copied next to our DLL. -->
+    <ItemDefinitionGroup>
+        <PackageReference PrivateAssets="all" ExcludeAssets="runtime" />
+        <Reference Private="false" />
+    </ItemDefinitionGroup>
+
+    <ItemGroup>
+        <PackageReference Include="MonoMod.RuntimeDetour" Version="25.3.6" PrivateAssets="all" ExcludeAssets="runtime" />
+        <PackageReference Include="CelesteMod.Publicizer" Version="1.1.2" CelesteAssembly="$(CelestePrefix)/Celeste.dll" />
+        <Reference Include="$(CelestePrefix)/MMHOOK_Celeste.dll" Private="false" />
+        <Reference Include="$(FnaPath)" Private="false" />
+    </ItemGroup>
+
+</Project>

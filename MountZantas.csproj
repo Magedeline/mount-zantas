@@ -15,7 +15,10 @@
     <Product>Mount Zantas</Product>
     <AssemblyTitle>Mount Zantas</AssemblyTitle>
     <Description>Launcher and mod manager for Celeste (uses the Everest mod loader).</Description>
-    <Version>0.6.6</Version>
+    <!-- Version must be numbers only; InformationalVersion is what the app shows and compares with releases. -->
+    <Version>0.8.0</Version>
+    <InformationalVersion>0.8.0c</InformationalVersion>
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
     <Copyright>Copyright (c) Magedeline</Copyright>
     <DebugType>none</DebugType>
     <ApplicationIcon>app.ico</ApplicationIcon>
@@ -28,7 +31,7 @@
   <ItemGroup>
     <!-- The portable logic lives in core/ (and is checked on Linux and macOS in CI); this project is the Windows UI on top of it. -->
     <ProjectReference Include="core\MountZantas.Core.csproj" />
-    <Compile Remove="core\**;tests\**" />
+    <Compile Remove="core\**;tests\**;desktop\**;loader\**" />
   </ItemGroup>
 </Project>
 

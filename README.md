@@ -7,6 +7,8 @@ A launcher and mod manager for [Celeste](https://www.celestegame.com/). It runs 
 ## Features
 
 - **Installations:** finds Celeste from Steam, Epic, GOG, the itch app, or any folder you pick.
+- **Zantas Loader:** Mount Zantas's own loader layer, an Everest core mod installed together with Everest, so every Everest mod still works. It shows the Zantas logo and Zantas Loader on the title screen, reports back which mods loaded and which failed (Everest page > Load report), and lets you play a mod preset for one run without changing your mod list (Mod presets > Play with). In the game it adds a Zantas Loader page to Mod Options with the load report, mod profiles you can save and apply from the main menu, and a choice of credits on the main menu's Credits screen. It also adds debug console (~) commands: `zantas_mods`, `zantas_profile_list` / `_save` / `_apply` / `_delete`, `zantas_loadtimes`, `zantas_conflicts` and `zantas_selftest` (the last three need the Lhotse loader). These used to be a separate mod, Cairn, which is now part of Zantas Loader.
+- **Loading screen:** when Mount Zantas starts Celeste with Everest, it shows its own loading screen instead of Everest's splash, with the mod being loaded and a progress bar (Options > "Show Mount Zantas's loading screen" turns it off).
 - **Everest:** install or remove any stable, beta or dev build. Downloads are checked against the SHA-256 GitHub publishes. Removing Everest restores your original game files.
 - **Mod manager:** enable/disable mods, favorites, search and filters, presets, sort, bulk actions, update-all, delete to the Recycle Bin. It warns about missing or disabled required mods and can fix them in one click.
 - **Download Mods:** search the public Everest mod database and install a mod with the helper mods it needs. Every download is checked against the database checksum.
@@ -27,6 +29,8 @@ A launcher and mod manager for [Celeste](https://www.celestegame.com/). It runs 
 
 Windows 10/11, x64. The exe is **not code-signed yet**, so Windows SmartScreen may show an "unknown publisher" warning (see [Code signing](#code-signing)).
 
+**Linux and macOS (preview, 0.8.0c):** the same app built with Avalonia, from [itch.io](https://maggystudio1245.itch.io/mount-zantas) or the release page. Linux: extract and run `./MountZantas`. macOS: drag `Mount Zantas.app` to Applications, then right-click > Open the first time (it isn't notarized). These builds haven't been tested on real Linux or Mac hardware yet; see [docs/PLATFORMS.md](docs/PLATFORMS.md).
+
 ## Safety
 
 - Everything it installs comes from an official source over HTTPS and is verified against a published checksum before it is used. If a checksum doesn't match, nothing is installed. The one exception: Everest beta/dev builds (hosted on Azure DevOps) have no published checksum, so installing one needs an explicit "Allow unverified builds" tick-box and the log says so.
@@ -41,6 +45,8 @@ Needs the .NET 8 SDK on Windows.
 ```
 dotnet publish -c Release -o dist
 ```
+
+The in-game Zantas Loader is in `loader/`. It compiles against an Everest install of Celeste, so CI can't build it: after changing it, run `./loader/build.ps1` (optionally `-Celeste <path>`) and commit the new `loader/ZantasLoader.zip`, which the app embeds.
 
 Settings, caches and downloaded tools live in `%LOCALAPPDATA%\MountZantas`. Set the environment variable `MOUNTZANTAS_DATA` to use another folder (handy for testing against a scratch Celeste copy).
 

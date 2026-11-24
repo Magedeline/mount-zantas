@@ -7,7 +7,9 @@ namespace MountZantas;
 // Lönn, the map editor: installed per user from the official release for this OS (Windows zip, Linux AppImage, macOS app bundle).
 static class Loenn {
     public static string Dir => Path.Combine(Config.DataDir, "loenn");
-    public static string Installed() { try { return File.ReadAllText(Path.Combine(Dir, "version.txt")).Trim(); } catch { return null; } }
+    public static string Installed() {
+        try { return File.ReadAllText(Path.Combine(Dir, "version.txt")).Trim(); } catch { return null; }
+    }
 
     public static bool IsAssetFor(string name, bool windows, bool mac) => windows ? name.EndsWith("windows.zip") : mac ? name.EndsWith("macos.app.zip") : name.EndsWith("linux.AppImage");
     public static bool IsMyAsset(string name) => IsAssetFor(name, Platform.Windows, Platform.Mac);
@@ -22,14 +24,29 @@ static class Loenn {
     }
 
     public static async Task Install(Action<string> log, IProgress<int> prog) {
-        var (tag, url, sha, name) = await Latest(); if (sha == null) throw new Exception("Lönn release has no published checksum; refusing to install.");
-        var tmp = Path.Combine(Path.GetTempPath(), "mountzantas-" + name); log($"Downloading Lönn {tag}..."); await Net.Download(url, tmp, prog);
-        if (!Net.Sha256(tmp).Equals(sha, StringComparison.OrdinalIgnoreCase)) { File.Delete(tmp); throw new Exception("Lönn download failed its checksum."); }
+        var (tag, url, sha, name) = await Latest();
+        if (sha == null) throw new Exception("Lönn release has no published checksum; refusing to install.");
+        var tmp = Path.Combine(Path.GetTempPath(), "mountzantas-" + name);
+        log($"Downloading Lönn {tag}...");
+        await Net.Download(url, tmp, prog);
+        if (!Net.Sha256(tmp).Equals(sha, StringComparison.OrdinalIgnoreCase)) {
+            File.Delete(tmp);
+            throw new Exception("Lönn download failed its checksum.");
+        }
         log("Verified (SHA-256). Installing...");
-        if (Directory.Exists(Dir)) Directory.Delete(Dir, true); Directory.CreateDirectory(Dir);
-        if (name.EndsWith(".AppImage")) { var dest = Path.Combine(Dir, "Loenn.AppImage"); File.Move(tmp, dest); Platform.MakeExecutable(dest); }
-        else { ZipFile.ExtractToDirectory(tmp, Dir, true); File.Delete(tmp); }
-        File.WriteAllText(Path.Combine(Dir, "version.txt"), tag); log("Lönn installed.");
+        if (Directory.Exists(Dir)) Directory.Delete(Dir, true);
+        Directory.CreateDirectory(Dir);
+        if (name.EndsWith(".AppImage")) {
+            var dest = Path.Combine(Dir, "Loenn.AppImage");
+            File.Move(tmp, dest);
+            Platform.MakeExecutable(dest);
+        }
+        else {
+            ZipFile.ExtractToDirectory(tmp, Dir, true);
+            File.Delete(tmp);
+        }
+        File.WriteAllText(Path.Combine(Dir, "version.txt"), tag);
+        log("Lönn installed.");
     }
 
     public static string FindApp() {
@@ -44,11 +61,26 @@ static class Loenn {
         var app = FindApp() ?? throw new Exception("Lönn is not installed yet. Use \"Install / update Lönn\" first.");
         var args = new List<string>();
         // In test mode (MOUNTZANTAS_DATA set) keep Lönn's own settings away from the real Lönn/Olympus configuration.
-        if (Environment.GetEnvironmentVariable("MOUNTZANTAS_DATA") is { Length: > 0 }) { args.Add("--storage-directory"); args.Add(Path.Combine(Config.DataDir, "loenn-storage")); }
+        if (Environment.GetEnvironmentVariable("MOUNTZANTAS_DATA") is { Length: > 0 }) {
+            args.Add("--storage-directory");
+            args.Add(Path.Combine(Config.DataDir, "loenn-storage"));
+        }
         if (map != null) args.Add(map);
         ProcessStartInfo psi;
-        if (Platform.Mac) { psi = new ProcessStartInfo("open"); psi.ArgumentList.Add("-n"); psi.ArgumentList.Add(app); if (args.Count > 0) { psi.ArgumentList.Add("--args"); foreach (var a in args) psi.ArgumentList.Add(a); } }
-        else { psi = new ProcessStartInfo(app) { WorkingDirectory = Path.GetDirectoryName(app) }; foreach (var a in args) psi.ArgumentList.Add(a); }
-        psi.UseShellExecute = false; Process.Start(psi);
+        if (Platform.Mac) {
+            psi = new ProcessStartInfo("open");
+            psi.ArgumentList.Add("-n");
+            psi.ArgumentList.Add(app);
+            if (args.Count > 0) {
+                psi.ArgumentList.Add("--args");
+                foreach (var a in args) psi.ArgumentList.Add(a);
+            }
+        }
+        else {
+            psi = new ProcessStartInfo(app) { WorkingDirectory = Path.GetDirectoryName(app) };
+            foreach (var a in args) psi.ArgumentList.Add(a);
+        }
+        psi.UseShellExecute = false;
+        Process.Start(psi);
     }
 }
