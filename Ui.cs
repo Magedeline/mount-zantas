@@ -13,9 +13,47 @@ static class Brand {
     public static Bitmap Logo(int s) {
         return GameSplash.Mark(s);
     }
+    // The window and taskbar icon. It holds every size, so Windows picks a sharp one instead of shrinking a big one.
     public static Icon AppIcon() {
-        using var b = Logo(64);
-        return Icon.FromHandle(b.GetHicon());
+        return new Icon(new MemoryStream(IcoFile()));
+    }
+
+    // A multi-size .ico (PNG entries): the small tile at 16-48 px, the full Zantas mark at 64-256 px.
+    // Used for the window icon and, through --make-icon, for app.ico (the exe's own icon).
+    public static byte[] IcoFile() {
+        var sizes = new[] { 16, 20, 24, 32, 40, 48, 64, 128, 256 };
+        var pngs = new List<byte[]>();
+        foreach (var size in sizes) {
+            using var image = GameSplash.IconImage(size);
+            using var png = new MemoryStream();
+            image.Save(png, System.Drawing.Imaging.ImageFormat.Png);
+            pngs.Add(png.ToArray());
+        }
+        using var ms = new MemoryStream();
+        using var w = new BinaryWriter(ms);
+        // Header: reserved, type 1 (icon), number of images.
+        w.Write((short)0);
+        w.Write((short)1);
+        w.Write((short)sizes.Length);
+        // One 16-byte directory entry per image, then the images themselves.
+        int offset = 6 + 16 * sizes.Length;
+        for (int i = 0; i < sizes.Length; i++) {
+            byte side = (byte)(sizes[i] >= 256 ? 0 : sizes[i]);
+            w.Write(side);
+            w.Write(side);
+            w.Write((byte)0);
+            w.Write((byte)0);
+            w.Write((short)1);
+            w.Write((short)32);
+            w.Write(pngs[i].Length);
+            w.Write(offset);
+            offset += pngs[i].Length;
+        }
+        foreach (var png in pngs) {
+            w.Write(png);
+        }
+        w.Flush();
+        return ms.ToArray();
     }
 }
 

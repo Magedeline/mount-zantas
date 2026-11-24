@@ -99,32 +99,7 @@ static class Program {
 
     // Writes a multi-size .ico (PNG-compressed entries) from the logo, for the exe, taskbar and shortcuts.
     static void MakeIcon(string path) {
-        var sizes = new[] { 16, 24, 32, 48, 64, 128, 256 };
-        var pngs = sizes.Select(s => {
-            using var b = Brand.Logo(s);
-            using var ms = new MemoryStream();
-            b.Save(ms, System.Drawing.Imaging.ImageFormat.Png);
-            return ms.ToArray();
-        }).ToList();
-        using var fs = File.Create(path);
-        using var w = new BinaryWriter(fs);
-        w.Write((short)0);
-        w.Write((short)1);
-        w.Write((short)sizes.Length);
-        int offset = 6 + 16 * sizes.Length;
-        for (int i = 0; i < sizes.Length; i++) {
-            byte d = (byte)(sizes[i] >= 256 ? 0 : sizes[i]);
-            w.Write(d);
-            w.Write(d);
-            w.Write((byte)0);
-            w.Write((byte)0);
-            w.Write((short)1);
-            w.Write((short)32);
-            w.Write(pngs[i].Length);
-            w.Write(offset);
-            offset += pngs[i].Length;
-        }
-        foreach (var p in pngs) w.Write(p);
+        File.WriteAllBytes(path, Brand.IcoFile());
     }
 
     // Renders a page to a PNG (for visual checks): MountZantas.exe --shot main|installs|everest|mods|download|loenn|options out.png
