@@ -138,12 +138,13 @@ static class GameLauncher {
         var l = Path.Combine(i.Path, "Celeste");
         return File.Exists(l) ? l : null;
     }
-    public static void Launch(Install i, string args = null) {
+    // Returns the started game process (Mount Zantas's loading screen follows it).
+    public static Process Launch(Install i, string args = null) {
         var exe = FindExecutable(i) ?? throw new Exception("Celeste's launcher wasn't found in " + i.Path);
         Platform.MakeExecutable(exe);
         var psi = new ProcessStartInfo(exe) { WorkingDirectory = i.Path, UseShellExecute = false };
         if (!string.IsNullOrWhiteSpace(args))
             foreach (var a in args.Split(' ', StringSplitOptions.RemoveEmptyEntries)) psi.ArgumentList.Add(a);
-        Process.Start(psi);
+        return Process.Start(psi);
     }
 }

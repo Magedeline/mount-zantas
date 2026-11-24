@@ -48,6 +48,12 @@ static class Program {
             bmp.Save(args[sp + 1], System.Drawing.Imaging.ImageFormat.Png);
             return 0;
         }
+        int gs = Array.IndexOf(args, "--game-splash-shot");
+        if (gs >= 0 && args.Length > gs + 1) {
+            ApplicationConfiguration.Initialize();
+            GameSplash.SaveExample(args[gs + 1]);
+            return 0;
+        }
         int di = Array.IndexOf(args, "--shot-dialog");
         if (di >= 0 && args.Length > di + 2) {   // MountZantas.exe --shot-dialog details|files out.png  (renders the GameBanana dialogs for Glyph)
             ApplicationConfiguration.Initialize();
@@ -462,23 +468,43 @@ class MainForm : Form {
         back.Visible = title != "";
         crumb.Left = title == "" ? 14 : 150;
     }
-    public void LaunchCeleste(string args = null) {
+    // presetName: the Mount Zantas preset this start uses, shown on the loading screen.
+    public void LaunchCeleste(string args = null, string presetName = null) {
         var i = Cfg.Current;
         if (i == null) {
             MessageBox.Show("No Celeste install found. Open Manage and add one.", Brand.Name);
             return;
         }
-        var exe = Path.Combine(i.Path, "Celeste.exe");
-        if (!File.Exists(exe)) {
-            MessageBox.Show("Celeste.exe is missing from " + i.Path, Brand.Name);
+
+        // With Everest, Mount Zantas shows its own loading screen and tells Everest to skip its splash.
+        bool ownScreen = Cfg.OwnLoadingScreen && GameStart.CanShow(i);
+        if (ownScreen) {
+            args = GameStart.WithoutEverestSplash(args);
+        }
+        var oldLog = GameStart.SnapshotLog(i);
+
+        Process game;
+        try {
+            game = GameLauncher.Launch(i, args);
+        } catch (Exception ex) {
+            MessageBox.Show(ex.Message, Brand.Name);
             return;
         }
-        Process.Start(new ProcessStartInfo(exe) {
-            WorkingDirectory = i.Path,
-            UseShellExecute = true,
-            Arguments = args ?? ""
-        });
-        SplashForm.ShowFor("Starting Celeste...", 2500);
-        if (Cfg.CloseOnLaunch) Close();
+
+        if (!ownScreen) {
+            SplashForm.ShowFor("Starting Celeste...", 2500);
+            if (Cfg.CloseOnLaunch) {
+                Close();
+            }
+            return;
+        }
+
+        var screen = new GameSplash(new GameStart(i, game, oldLog, args, presetName));
+        if (Cfg.CloseOnLaunch) {
+            // Closing this window ends the app, so wait until the loading screen is done.
+            Hide();
+            screen.FormClosed += (_, _) => Close();
+        }
+        screen.Show();
     }
 }

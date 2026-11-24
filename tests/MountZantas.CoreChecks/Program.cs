@@ -279,6 +279,43 @@ static class Checks {
             Ok(ZantasLoader.InstalledVersion(inst) == null, "Zantas Loader can be removed");
         }
 
+        // ----- loading screen: follows Everest's log.txt while Celeste starts -----
+        {
+            var game = FakeCeleste(Temp("loadscreen"));
+            var inst = new Install { Path = game };
+            var mods = Path.Combine(game, "Mods");
+            Touch(Path.Combine(mods, "blacklist.txt"), "Skipped\n");
+            Touch(Path.Combine(mods, "Alpha", "everest.yaml"), "- Name: AlphaHelper\n  Version: 1.0.0\n");
+            Touch(Path.Combine(mods, "Beta", "everest.yaml"), "- Name: BetaHelper\n  Version: 1.0.0\n");
+            Touch(Path.Combine(mods, "Skipped", "everest.yaml"), "- Name: Skipped\n  Version: 1.0.0\n");
+            var log = Path.Combine(game, "log.txt");
+            Touch(log, "(11/24/2026 09:00:00) [Everest] [Info] [core] Booting Everest\nDONE LOADING (in 1000ms)\n");
+
+            Ok(GameStart.WithoutEverestSplash(null) == "--disable-splash", "loading screen switches Everest's splash off");
+            Ok(GameStart.WithoutEverestSplash("--debug") == "--debug --disable-splash", "loading screen keeps other arguments");
+
+            var oldLog = GameStart.SnapshotLog(inst);
+            var start = new GameStart(inst, null, oldLog, "");
+            var st = start.Poll();
+            Ok(!st.Done && st.Detail == "Booting Everest", "loading screen ignores the previous game's log");
+
+            Touch(log, "(11/24/2026 10:00:00) [Everest] [Info] [core] Booting Everest\n"
+                + "(11/24/2026 10:00:01) [Everest] [Info] [core] Registered code module Celeste.Mod.Beta.BetaModule for module BetaHelper 1.0.0.\n"
+                + "(11/24/2026 10:00:02) [Everest] [Info] [core] Registered code mo");
+            st = start.Poll();
+            Ok(st.Detail == "Loading BetaHelper [2/2]" && st.Progress > 0.5 && st.Progress < 0.6, "loading screen shows the mod and its place in the load order");
+
+            File.AppendAllText(log, "dule X for module AlphaHelper 1.0.0.\n"
+                + "(11/24/2026 10:00:03) [Everest] [Info] [loader] Loaded 3 modules\n"
+                + " - GFX LOAD: 100ms\n - MTN LOAD: 10ms\n");
+            st = start.Poll();
+            Ok(st.Detail == "Loading audio" && st.Progress > 0.6 && st.Progress < 0.7, "loading screen follows game content steps after the mods");
+
+            File.AppendAllText(log, "DONE LOADING (in 2000ms)\n");
+            st = start.Poll();
+            Ok(st.Progress == 1 && st.Detail == "Almost done...", "loading screen is full at DONE LOADING");
+        }
+
         // ----- map reader: build a tiny .bin, read, render, and find it inside a zip -----
         {
             var bin = TinyMap();

@@ -18,6 +18,8 @@ class Config {
     public Dictionary<string, List<string>> Presets { get; set; } = new();
     public bool UpdateOnStartup { get; set; }
     public bool CloseOnLaunch { get; set; }
+    // Show Mount Zantas's own loading screen instead of Everest's splash while Celeste starts.
+    public bool OwnLoadingScreen { get; set; } = true;
     public bool AutoUpdateApp { get; set; } = true;
     public string Mirror { get; set; } = "0x0a.de";
     public string Accent { get; set; } = "#6a4cff";

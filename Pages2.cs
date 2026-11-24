@@ -312,7 +312,7 @@ class ModsPage : Page {
                 try {
                     var args = ZantasLoader.PrepareProfile(Inst, name, kv.Value);
                     log.Log($"Starting Celeste with preset \"{name}\" (your mod list is unchanged).");
-                    App.LaunchCeleste(args);
+                    App.LaunchCeleste(args, name);
                 } catch (Exception ex) { log.Log("ERROR: " + ex.Message); }
             });
             menu.Items.Add($"Delete: {name}", null, (_, _) => {
@@ -516,6 +516,11 @@ class OptionsPage : Page {
             App.Cfg.CloseOnLaunch = cl.Checked;
             App.Cfg.Save();
         };
+        var ls = Ui.Check("Show Mount Zantas's loading screen when Celeste starts", App.Cfg.OwnLoadingScreen);
+        ls.CheckedChanged += (_, _) => {
+            App.Cfg.OwnLoadingScreen = ls.Checked;
+            App.Cfg.Save();
+        };
         var au = Ui.Check("Update Mount Zantas itself (from GitHub)", App.Cfg.AutoUpdateApp);
         au.CheckedChanged += (_, _) => {
             App.Cfg.AutoUpdateApp = au.Checked;
@@ -523,8 +528,8 @@ class OptionsPage : Page {
         };
         var cu = Ui.Btn("Check for a Mount Zantas update", () => _ = App.CheckSelfUpdate(true, log.Log), 320);
         cu.Margin = new Padding(0, 4, 0, 0);
-        up.Margin = cl.Margin = au.Margin = new Padding(0, 4, 0, 4);
-        Put(Ui.Section("Behaviour", up, cl, au, cu), 1, 1);
+        up.Margin = cl.Margin = ls.Margin = au.Margin = new Padding(0, 4, 0, 4);
+        Put(Ui.Section("Behaviour", up, cl, ls, au, cu), 1, 1);
 
         var mi = Ui.Combo("0x0a.de mirror (default)", "GameBanana (original links)");
         mi.SelectedIndex = App.Cfg.Mirror == "gamebanana" ? 1 : 0;

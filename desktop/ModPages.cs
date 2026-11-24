@@ -286,7 +286,7 @@ class ModsPage : Page {
                 try {
                     var args = ZantasLoader.PrepareProfile(Inst, name, kv.Value);
                     log.Log($"Starting Celeste with preset \"{name}\" (your mod list is unchanged).");
-                    App.LaunchCeleste(args);
+                    App.LaunchCeleste(args, name);
                 } catch (Exception ex) { log.Log("ERROR: " + ex.Message); }
             }));
             f.Items.Add(Item($"Delete: {name}", () => {

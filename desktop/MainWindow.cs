@@ -58,17 +58,43 @@ class MainWindow : Window {
         back.IsVisible = title != "";
     }
 
-    public void LaunchCeleste(string args = null) {
+    // presetName: the Mount Zantas preset this start uses, shown on the loading screen.
+    public void LaunchCeleste(string args = null, string presetName = null) {
         var i = Cfg.Current;
         if (i == null) {
             _ = Dlg.Info(this, "No Celeste install found. Open Manage and add one.");
             return;
         }
-        try { GameLauncher.Launch(i, args); } catch (Exception ex) {
+
+        // With Everest, Mount Zantas shows its own loading screen and tells Everest to skip its splash.
+        bool ownScreen = Cfg.OwnLoadingScreen && GameStart.CanShow(i);
+        if (ownScreen) {
+            args = GameStart.WithoutEverestSplash(args);
+        }
+        var oldLog = GameStart.SnapshotLog(i);
+
+        System.Diagnostics.Process game;
+        try {
+            game = GameLauncher.Launch(i, args);
+        } catch (Exception ex) {
             _ = Dlg.Info(this, ex.Message);
             return;
         }
-        if (Cfg.CloseOnLaunch) Close();
+
+        if (!ownScreen) {
+            if (Cfg.CloseOnLaunch) {
+                Close();
+            }
+            return;
+        }
+
+        var screen = new GameSplash(new GameStart(i, game, oldLog, args, presetName));
+        if (Cfg.CloseOnLaunch) {
+            // Close this window too once the loading screen is done.
+            Hide();
+            screen.Closed += (_, _) => Close();
+        }
+        screen.Show();
     }
 
     // Linux and macOS builds don't replace themselves: they say when a newer release exists and link to it.
@@ -559,6 +585,7 @@ class OptionsPage : Page {
         g.Children.Add(Ui.Section("Behaviour",
             Opt("Update mods on startup", App.Cfg.UpdateOnStartup, v => App.Cfg.UpdateOnStartup = v),
             Opt("Close Mount Zantas after starting Celeste", App.Cfg.CloseOnLaunch, v => App.Cfg.CloseOnLaunch = v),
+            Opt("Show Mount Zantas's loading screen when Celeste starts", App.Cfg.OwnLoadingScreen, v => App.Cfg.OwnLoadingScreen = v),
             Opt("Tell me when a new Mount Zantas is out", App.Cfg.AutoUpdateApp, v => App.Cfg.AutoUpdateApp = v),
             Ui.Btn("Check for a Mount Zantas update", () => _ = App.CheckUpdate(true, log.Log), 320)).At(1, 1));
 

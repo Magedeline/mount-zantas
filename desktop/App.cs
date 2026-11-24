@@ -96,27 +96,9 @@ static class Brand {
 }
 
 // Original logo: twin volcano peaks (Shasta and Shastina) with a snowcap and a star. Drawn, so it follows the accent colour.
-class Logo : Control {
-    public Logo(double size) { Width = Height = size; }
-    public override void Render(DrawingContext g) {
-        double u = Bounds.Width / 100;
-        StreamGeometry Poly(params double[] p) {
-            var sg = new StreamGeometry();
-            using (var c = sg.Open()) {
-                c.BeginFigure(new Point(p[0] * u, p[1] * u), true);
-                for (int i = 2; i < p.Length; i += 2) c.LineTo(new Point(p[i] * u, p[i + 1] * u));
-                c.EndFigure(true);
-            }
-            return sg;
-        }
-        g.DrawGeometry(Brand.B(Brand.Darker(Brand.Accent)), null, Poly(50, 86, 74, 48, 98, 86));
-        g.DrawGeometry(Brand.B(Brand.Accent), null, Poly(6, 86, 44, 20, 82, 86));
-        g.DrawGeometry(Brushes.White, null, Poly(44, 20, 55, 39, 49.5, 35, 44, 42, 38.5, 35, 33, 39));
-        g.DrawGeometry(
-            Brand.B(Color.FromRgb(255, 235, 150)),
-            null,
-            Poly(82, 12, 84, 19, 91, 21, 84, 23, 82, 30, 80, 23, 73, 21, 80, 19));
-    }
+// The app's logo is the Zantas mark (see core/ZantasMark.cs and ZantasMarkView in GameSplash.cs).
+class Logo : ZantasMarkView {
+    public Logo(double size) : base(size) { }
 }
 
 static class Ui {

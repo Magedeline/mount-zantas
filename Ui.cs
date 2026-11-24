@@ -9,20 +9,9 @@ static class Brand {
         Green = Color.FromArgb(0x2f, 0x6b, 0x40), Orange = Color.FromArgb(0x7a, 0x5c, 0x1c);
     public static Color Accent = ColorTranslator.FromHtml("#6a4cff");
 
-    // Original logo: twin volcano peaks (Shasta and Shastina) with a snowcap and a star.
+    // The Zantas mark: a mountain with a gear in its middle and a star in the gear (see core/ZantasMark.cs).
     public static Bitmap Logo(int s) {
-        var b = new Bitmap(s, s);
-        using var g = Graphics.FromImage(b);
-        g.SmoothingMode = SmoothingMode.AntiAlias;
-        float u = s / 100f;
-        PointF P(float x, float y) => new(x * u, y * u);
-        using (var back = new SolidBrush(ControlPaint.Dark(Accent))) g.FillPolygon(back, new[] { P(50, 86), P(74, 48), P(98, 86) });
-        using (var main = new SolidBrush(Accent)) g.FillPolygon(main, new[] { P(6, 86), P(44, 20), P(82, 86) });
-        using (var snow = new SolidBrush(Color.White)) g.FillPolygon(snow, new[] { P(44, 20), P(55, 39), P(49.5f, 35), P(44, 42), P(38.5f, 35), P(33, 39) });
-        using (var star = new SolidBrush(Color.FromArgb(255, 235, 150))) g.FillPolygon(
-            star,
-            new[] { P(82, 12), P(84, 19), P(91, 21), P(84, 23), P(82, 30), P(80, 23), P(73, 21), P(80, 19) });
-        return b;
+        return GameSplash.Mark(s);
     }
     public static Icon AppIcon() {
         using var b = Logo(64);
