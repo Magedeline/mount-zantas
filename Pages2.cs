@@ -569,7 +569,7 @@ class OptionsPage : Page {
             Width = 56,
             Height = 56
         });
-        about.Controls.Add(Ui.Lbl($"{Brand.Name} {ver}\r\nA Celeste launcher and mod manager that uses the Everest mod loader (MIT).\r\nCeleste is made by Maddy Makes Games. This launcher is fan-made.", 9.5f, false, Brand.Dim));
+        about.Controls.Add(Ui.Lbl($"{Brand.Name} {ver}\r\nA Celeste launcher and mod manager that uses the Everest mod loader (GPL-3.0).\r\nCeleste is made by Maddy Makes Games. This launcher is fan-made.", 9.5f, false, Brand.Dim));
         Put(Ui.Section("About", about), 0, 3, 2);
         Controls.Add(f);
         Controls.Add(log);

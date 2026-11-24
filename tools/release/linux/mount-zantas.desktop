@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Mount Zantas
+Comment=Celeste launcher and mod manager
+Exec=MountZantas
+Icon=mount-zantas
+Categories=Game;Utility;
+Terminal=false
