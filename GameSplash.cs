@@ -155,59 +155,6 @@ class GameSplash : Form {
         return b;
     }
 
-    // The icon at taskbar and title-bar sizes (48 px and smaller), where the full mark's gear would shrink to a dot:
-    // a rounded purple tile filled by the gear, with the dark hub and the gold star in its middle.
-    public static Bitmap SmallIcon(int size) {
-        var b = new Bitmap(size, size);
-        using var g = Graphics.FromImage(b);
-        g.SmoothingMode = SmoothingMode.AntiAlias;
-        g.PixelOffsetMode = PixelOffsetMode.HighQuality;
-        float u = size / 100f;
-
-        // The tile, lighter at the top.
-        float corner = 22 * u;
-        using (var tile = new GraphicsPath()) {
-            tile.AddArc(0, 0, corner * 2, corner * 2, 180, 90);
-            tile.AddArc(size - corner * 2, 0, corner * 2, corner * 2, 270, 90);
-            tile.AddArc(size - corner * 2, size - corner * 2, corner * 2, corner * 2, 0, 90);
-            tile.AddArc(0, size - corner * 2, corner * 2, corner * 2, 90, 90);
-            tile.CloseFigure();
-            var top = Mix(Brand.Accent, Color.White, 0.2);
-            var bottom = Mix(Brand.Accent, Color.Black, 0.3);
-            using var fill = new LinearGradientBrush(new PointF(0, 0), new PointF(0, size), top, bottom);
-            g.FillPath(fill, tile);
-        }
-
-        // The gear, hub and star from the mark, moved to the middle of the tile and made about twice as big.
-        const float scale = 2.15f;
-        PointF[] Points(float[] xy) {
-            var points = new PointF[xy.Length / 2];
-            for (int i = 0; i < points.Length; i++) {
-                float x = 50 + (xy[i * 2] - ZantasMark.GearX) * scale;
-                float y = 50 + (xy[i * 2 + 1] - ZantasMark.GearY) * scale;
-                points[i] = new PointF(x * u, y * u);
-            }
-            return points;
-        }
-        g.FillPolygon(Brushes.White, Points(ZantasMark.Gear));
-        float hub = ZantasMark.HubRadius * scale * u;
-        using (var dark = new SolidBrush(Mix(Brand.Accent, Color.Black, 0.6))) {
-            g.FillEllipse(dark, 50 * u - hub, 50 * u - hub, hub * 2, hub * 2);
-        }
-        using (var gold = new SolidBrush(Color.FromArgb(255, 235, 150))) {
-            g.FillPolygon(gold, Points(ZantasMark.Star));
-        }
-        return b;
-    }
-
-    // The right picture for an icon of this size: the small tile up to 48 px, the full mark above that.
-    public static Bitmap IconImage(int size) {
-        if (size <= 48) {
-            return SmallIcon(size);
-        }
-        return Mark(size);
-    }
-
     static readonly (int x, int y, int r)[] Stars = {
         (610, 40, 3), (700, 92, 2), (540, 120, 2), (760, 30, 2), (660, 170, 3), (735, 210, 2), (480, 60, 2), (590, 230, 2)
     };

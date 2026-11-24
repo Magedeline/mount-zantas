@@ -18,13 +18,13 @@ static class Brand {
         return new Icon(new MemoryStream(IcoFile()));
     }
 
-    // A multi-size .ico (PNG entries): the small tile at 16-48 px, the full Zantas mark at 64-256 px.
+    // A multi-size .ico (PNG entries): the Zantas mark at every size from 16 to 256 px.
     // Used for the window icon and, through --make-icon, for app.ico (the exe's own icon).
     public static byte[] IcoFile() {
         var sizes = new[] { 16, 20, 24, 32, 40, 48, 64, 128, 256 };
         var pngs = new List<byte[]>();
         foreach (var size in sizes) {
-            using var image = GameSplash.IconImage(size);
+            using var image = GameSplash.Mark(size);
             using var png = new MemoryStream();
             image.Save(png, System.Drawing.Imaging.ImageFormat.Png);
             pngs.Add(png.ToArray());
