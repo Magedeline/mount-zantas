@@ -13,7 +13,7 @@
     <Description>Launcher and mod manager for Celeste (uses the Everest mod loader).</Description>
     <!-- Version must be numbers only; InformationalVersion is what the app shows and compares with releases. -->
     <Version>0.8.0</Version>
-    <InformationalVersion>0.8.0b</InformationalVersion>
+    <InformationalVersion>0.8.0c</InformationalVersion>
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
     <Copyright>Copyright (c) Magedeline</Copyright>
     <ApplicationIcon>..\app.ico</ApplicationIcon>
