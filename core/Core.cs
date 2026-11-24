@@ -5,7 +5,11 @@ using System.Text.RegularExpressions;
 
 namespace MountZantas;
 
-class Install { public string Name { get; set; } public string Path { get; set; } public string Store { get; set; } }
+class Install {
+    public string Name { get; set; }
+    public string Path { get; set; }
+    public string Store { get; set; }
+}
 
 class Config {
     public List<Install> Installs { get; set; } = new();
@@ -22,21 +26,43 @@ class Config {
     // MOUNTZANTAS_DATA relocates all settings, caches and tools (used for safe testing against a scratch Celeste copy).
     public static string DataDir => Environment.GetEnvironmentVariable("MOUNTZANTAS_DATA") is { Length: > 0 } d ? d : System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "MountZantas");
     static string FilePath => System.IO.Path.Combine(DataDir, "config.json");
-    public static Config Load() { try { return JsonSerializer.Deserialize<Config>(File.ReadAllText(FilePath)) ?? new(); } catch { return new(); } }
-    public void Save() { try { Directory.CreateDirectory(DataDir); File.WriteAllText(FilePath, JsonSerializer.Serialize(this, new JsonSerializerOptions { WriteIndented = true })); } catch { } }
+    public static Config Load() {
+        try { return JsonSerializer.Deserialize<Config>(File.ReadAllText(FilePath)) ?? new(); } catch { return new(); }
+    }
+    public void Save() {
+        try {
+            Directory.CreateDirectory(DataDir);
+            File.WriteAllText(
+                FilePath,
+                JsonSerializer.Serialize(this, new JsonSerializerOptions { WriteIndented = true }));
+        } catch { }
+    }
     public Install Current => Installs.Count == 0 ? null : Installs[Math.Clamp(Selected, 0, Installs.Count - 1)];
 }
 
 static class Net {
     public static readonly HttpClient Http = Make();
-    static HttpClient Make() { var c = new HttpClient { Timeout = TimeSpan.FromMinutes(30) }; c.DefaultRequestHeaders.UserAgent.ParseAdd("MountZantas/0.1"); return c; }
+    static HttpClient Make() {
+        var c = new HttpClient { Timeout = TimeSpan.FromMinutes(30) };
+        c.DefaultRequestHeaders.UserAgent.ParseAdd("MountZantas/0.1");
+        return c;
+    }
 
     // Downloads with up to 3 attempts: CDN nodes occasionally drop a TLS handshake or connection, and a retry usually succeeds.
     public static async Task Download(string url, string dest, IProgress<int> p = null) {
         for (int attempt = 1; ; attempt++) {
-            try { await DownloadOnce(url, dest, p); return; }
-            catch (Exception ex) when (attempt < 3 && IsTransient(ex)) { try { File.Delete(dest); } catch { } await Task.Delay(1200 * attempt); }
-            catch (Exception ex) when (IsTransient(ex)) { try { File.Delete(dest); } catch { } throw new Exception("The download server dropped the connection three times in a row (" + (ex.InnerException?.Message ?? ex.Message) + "). Please try again in a moment."); }
+            try {
+                await DownloadOnce(url, dest, p);
+                return;
+            }
+            catch (Exception ex) when (attempt < 3 && IsTransient(ex)) {
+                try { File.Delete(dest); } catch { }
+                await Task.Delay(1200 * attempt);
+            }
+            catch (Exception ex) when (IsTransient(ex)) {
+                try { File.Delete(dest); } catch { }
+                throw new Exception("The download server dropped the connection three times in a row (" + (ex.InnerException?.Message ?? ex.Message) + "). Please try again in a moment.");
+            }
         }
     }
     static bool IsTransient(Exception ex) {
@@ -44,14 +70,29 @@ static class Net {
         return ex is IOException || ex is TaskCanceledException || ex is System.Security.Authentication.AuthenticationException;
     }
     static async Task DownloadOnce(string url, string dest, IProgress<int> p) {
-        using var r = await Http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead); r.EnsureSuccessStatusCode();
+        using var r = await Http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead);
+        r.EnsureSuccessStatusCode();
         long total = r.Content.Headers.ContentLength ?? -1, done = 0;
-        using var s = await r.Content.ReadAsStreamAsync(); using var f = File.Create(dest);
-        var buf = new byte[81920]; int n;
-        while ((n = await s.ReadAsync(buf)) > 0) { await f.WriteAsync(buf.AsMemory(0, n)); done += n; if (total > 0) p?.Report((int)(done * 100 / total)); }
+        using var s = await r.Content.ReadAsStreamAsync();
+        using var f = File.Create(dest);
+        var buf = new byte[81920];
+        int n;
+        while ((n = await s.ReadAsync(buf)) > 0) {
+            await f.WriteAsync(buf.AsMemory(0, n));
+            done += n;
+            if (total > 0) p?.Report((int)(done * 100 / total));
+        }
     }
-    public static string XxHash(string file) { var h = new System.IO.Hashing.XxHash64(); using var s = File.OpenRead(file); h.Append(s); return Convert.ToHexString(h.GetCurrentHash()).ToLowerInvariant(); }
-    public static string Sha256(string file) { using var s = File.OpenRead(file); return Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(s)).ToLowerInvariant(); }
+    public static string XxHash(string file) {
+        var h = new System.IO.Hashing.XxHash64();
+        using var s = File.OpenRead(file);
+        h.Append(s);
+        return Convert.ToHexString(h.GetCurrentHash()).ToLowerInvariant();
+    }
+    public static string Sha256(string file) {
+        using var s = File.OpenRead(file);
+        return Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(s)).ToLowerInvariant();
+    }
 
     // SHA-256 that GitHub publishes for a release asset, or null.
     public static async Task<string> GitHubDigest(string tagApiUrl, string assetName) {
@@ -71,35 +112,69 @@ static class ModDb {
         if (cache != null && !force) return cache;
         var y = await Net.Http.GetStringAsync(Url);
         var d = new Dictionary<string, ModEntry>(StringComparer.OrdinalIgnoreCase);
-        var rx = new Regex(@"^(?<n>[^\s#][^\n]*?):\r?\n  Version: (?<v>[^\n\r]+)\r?\n  LastUpdate: (?<t>\d+)\r?\n  MirrorName: '?(?<m>[^'\r\n]+)'?\r?\n  URL: (?<u>[^\r\n]+)\r?\n  xxHash:\r?\n(?<h>(?:  - [0-9a-fA-F]+\r?\n)+)(?:  Size: (?<s>\d+))?", RegexOptions.Multiline);
+        var rx = new Regex(
+            @"^(?<n>[^\s#][^\n]*?):\r?\n  Version: (?<v>[^\n\r]+)\r?\n  LastUpdate: (?<t>\d+)\r?\n  MirrorName: '?(?<m>[^'\r\n]+)'?\r?\n  URL: (?<u>[^\r\n]+)\r?\n  xxHash:\r?\n(?<h>(?:  - [0-9a-fA-F]+\r?\n)+)(?:  Size: (?<s>\d+))?",
+            RegexOptions.Multiline);
         foreach (Match m in rx.Matches(y)) {
             var hashes = Regex.Matches(m.Groups["h"].Value, @"- ([0-9a-fA-F]+)").Select(x => x.Groups[1].Value).ToArray();
             var name = m.Groups["n"].Value.Trim('\'', '"');
-            d[name] = new ModEntry(name, m.Groups["v"].Value.Trim(), long.Parse(m.Groups["t"].Value), m.Groups["m"].Value.Trim(), m.Groups["u"].Value.Trim(), hashes, m.Groups["s"].Success ? long.Parse(m.Groups["s"].Value) : 0);
+            d[name] = new ModEntry(
+                name,
+                m.Groups["v"].Value.Trim(),
+                long.Parse(m.Groups["t"].Value),
+                m.Groups["m"].Value.Trim(),
+                m.Groups["u"].Value.Trim(),
+                hashes,
+                m.Groups["s"].Success ? long.Parse(m.Groups["s"].Value) : 0);
         }
         return cache = d;
     }
     public static bool Newer(string have, string latest) => Version.TryParse(Clean(have), out var a) && Version.TryParse(Clean(latest), out var b) && b > a;
-    static string Clean(string v) { var m = Regex.Match(v ?? "", @"\d+(\.\d+){0,3}"); return m.Success ? m.Value : ""; }
+    static string Clean(string v) {
+        var m = Regex.Match(v ?? "", @"\d+(\.\d+){0,3}");
+        return m.Success ? m.Value : "";
+    }
 }
 
-class ModInfo { public string File, Name, Version; public bool IsDir, Enabled; public string[] Deps = Array.Empty<string>(); }
+class ModInfo {
+    public string File, Name, Version;
+    public bool IsDir, Enabled;
+    public string[] Deps = Array.Empty<string>();
+}
 
 static class Mods {
     public static string Dir(Install i) => Path.Combine(i.Path, "Mods");
     static string BlacklistPath(Install i) => Path.Combine(Dir(i), "blacklist.txt");
 
     public static (string name, string ver, string[] deps) ParseYaml(string y) {
-        var n = Regex.Match(y, @"^\s*-?\s*Name:\s*(.+)$", RegexOptions.Multiline); var v = Regex.Match(y, @"^\s*Version:\s*(.+)$", RegexOptions.Multiline);
-        var deps = new List<string>(); int i = y.IndexOf("Dependencies:");
-        if (i >= 0) { var b = y.Substring(i); int o = b.IndexOf("OptionalDependencies:"); if (o >= 0) b = b.Substring(0, o); foreach (Match m in Regex.Matches(b, @"-\s*Name:\s*(.+)")) deps.Add(m.Groups[1].Value.Trim()); }
+        var n = Regex.Match(y, @"^\s*-?\s*Name:\s*(.+)$", RegexOptions.Multiline);
+        var v = Regex.Match(y, @"^\s*Version:\s*(.+)$", RegexOptions.Multiline);
+        var deps = new List<string>();
+        int i = y.IndexOf("Dependencies:");
+        if (i >= 0) {
+            var b = y.Substring(i);
+            int o = b.IndexOf("OptionalDependencies:");
+            if (o >= 0) b = b.Substring(0, o);
+            foreach (Match m in Regex.Matches(b, @"-\s*Name:\s*(.+)")) deps.Add(m.Groups[1].Value.Trim());
+        }
         return (n.Success ? n.Groups[1].Value.Trim() : null, v.Success ? v.Groups[1].Value.Trim() : "", deps.ToArray());
     }
-    public static string YamlOfZip(string zip) { using var z = ZipFile.OpenRead(zip); var e = z.GetEntry("everest.yaml") ?? z.GetEntry("everest.yml"); if (e == null) return ""; using var r = new StreamReader(e.Open()); return r.ReadToEnd(); }
+    public static string YamlOfZip(string zip) {
+        using var z = ZipFile.OpenRead(zip);
+        var e = z.GetEntry("everest.yaml") ?? z.GetEntry("everest.yml");
+        if (e == null) return "";
+        using var r = new StreamReader(e.Open());
+        return r.ReadToEnd();
+    }
 
     public static HashSet<string> Disabled(Install i) {
         var s = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        try { foreach (var l in File.ReadAllLines(BlacklistPath(i))) { var t = l.Trim(); if (t.Length > 0 && !t.StartsWith("#")) s.Add(t); } } catch { }
+        try {
+            foreach (var l in File.ReadAllLines(BlacklistPath(i))) {
+                var t = l.Trim();
+                if (t.Length > 0 && !t.StartsWith("#")) s.Add(t);
+            }
+        } catch { }
         return s;
     }
     public static void WriteDisabled(Install i, IEnumerable<string> disabled) {
@@ -111,30 +186,56 @@ static class Mods {
     // After some mods were just disabled: the enabled mods that they needed (directly or through other helpers)
     // and that no remaining enabled mod requires any more.
     public static List<ModInfo> UnusedAfterDisable(List<ModInfo> all, IEnumerable<ModInfo> justDisabled) {
-        var by = new Dictionary<string, ModInfo>(StringComparer.OrdinalIgnoreCase); foreach (var m in all) by[m.Name] = m;
-        var cand = new HashSet<ModInfo>(); var todo = new Stack<ModInfo>(justDisabled);
-        while (todo.Count > 0) foreach (var d in todo.Pop().Deps) if (!d.StartsWith("Everest", StringComparison.OrdinalIgnoreCase) && by.TryGetValue(d, out var dm) && dm.Enabled && cand.Add(dm)) todo.Push(dm);
+        var by = new Dictionary<string, ModInfo>(StringComparer.OrdinalIgnoreCase);
+        foreach (var m in all) by[m.Name] = m;
+        var cand = new HashSet<ModInfo>();
+        var todo = new Stack<ModInfo>(justDisabled);
+        while (todo.Count > 0)
+            foreach (var d in todo.Pop().Deps)
+                if (!d.StartsWith("Everest", StringComparison.OrdinalIgnoreCase) && by.TryGetValue(d, out var dm) && dm.Enabled && cand.Add(dm)) todo.Push(dm);
         bool changed = true;   // a candidate stays if an enabled non-candidate (or a kept candidate) still needs it
         while (changed) {
             changed = false;
             foreach (var c in cand.ToList()) {
                 bool needed = all.Any(m => m.Enabled && m != c && !cand.Contains(m) && m.Deps.Any(d => d.Equals(c.Name, StringComparison.OrdinalIgnoreCase)));
-                if (needed) { cand.Remove(c); changed = true; }
+                if (needed) {
+                    cand.Remove(c);
+                    changed = true;
+                }
             }
         }
         return cand.OrderBy(m => m.Name, StringComparer.OrdinalIgnoreCase).ToList();
     }
 
     public static List<ModInfo> Scan(Install i) {
-        var res = new List<ModInfo>(); var dir = Dir(i); if (!Directory.Exists(dir)) return res; var off = Disabled(i);
+        var res = new List<ModInfo>();
+        var dir = Dir(i);
+        if (!Directory.Exists(dir)) return res;
+        var off = Disabled(i);
         foreach (var z in Directory.GetFiles(dir, "*.zip")) {
-            try { var (n, v, d) = ParseYaml(YamlOfZip(z)); res.Add(new ModInfo { File = Path.GetFileName(z), Name = n ?? Path.GetFileNameWithoutExtension(z), Version = v, Deps = d }); }
-            catch { res.Add(new ModInfo { File = Path.GetFileName(z), Name = Path.GetFileNameWithoutExtension(z), Version = "?" }); }
+            try {
+                var (n, v, d) = ParseYaml(YamlOfZip(z));
+                res.Add(new ModInfo {
+                    File = Path.GetFileName(z),
+                    Name = n ?? Path.GetFileNameWithoutExtension(z),
+                    Version = v,
+                    Deps = d
+                });
+            }
+            catch {
+                res.Add(new ModInfo {
+                    File = Path.GetFileName(z),
+                    Name = Path.GetFileNameWithoutExtension(z),
+                    Version = "?"
+                });
+            }
         }
         foreach (var d in Directory.GetDirectories(dir)) {
-            var name = Path.GetFileName(d); if (name.Equals("Cache", StringComparison.OrdinalIgnoreCase)) continue;
+            var name = Path.GetFileName(d);
+            if (name.Equals("Cache", StringComparison.OrdinalIgnoreCase)) continue;
             var y = new[] { "everest.yaml", "everest.yml" }.Select(f => Path.Combine(d, f)).FirstOrDefault(File.Exists);
-            if (y == null) continue; var (n, v, deps) = ParseYaml(File.ReadAllText(y));
+            if (y == null) continue;
+            var (n, v, deps) = ParseYaml(File.ReadAllText(y));
             res.Add(new ModInfo { File = name, Name = n ?? name, Version = v, IsDir = true, Deps = deps });
         }
         foreach (var m in res) m.Enabled = !off.Contains(m.File);
@@ -143,14 +244,27 @@ static class Mods {
 
     // Download a mod from the public database (checksum verified), then any missing required dependencies.
     public static async Task InstallWithDeps(Install inst, string name, Config cfg, Action<string> log, IProgress<int> prog = null, HashSet<string> seen = null) {
-        seen ??= new(StringComparer.OrdinalIgnoreCase); if (!seen.Add(name)) return;
-        var db = await ModDb.Get(); if (!db.TryGetValue(name, out var e)) { log($"  ! {name} is not in the mod database"); return; }
-        Directory.CreateDirectory(Dir(inst)); var file = Path.Combine(Dir(inst), name + ".zip");
+        seen ??= new(StringComparer.OrdinalIgnoreCase);
+        if (!seen.Add(name)) return;
+        var db = await ModDb.Get();
+        if (!db.TryGetValue(name, out var e)) {
+            log($"  ! {name} is not in the mod database");
+            return;
+        }
+        Directory.CreateDirectory(Dir(inst));
+        var file = Path.Combine(Dir(inst), name + ".zip");
         log($"Downloading {name} {e.Version}");
         var sources = cfg.Mirror == "gamebanana" ? new[] { e.Url } : new[] { "https://celestemodupdater.0x0a.de/banana-mirror/" + e.Mirror + ".zip", e.Url };
         bool ok = false;
         foreach (var s in sources) {
-            try { await Net.Download(s, file, prog); if (e.Hashes.Contains(Net.XxHash(file), StringComparer.OrdinalIgnoreCase)) { ok = true; break; } log("  checksum mismatch, trying next source"); }
+            try {
+                await Net.Download(s, file, prog);
+                if (e.Hashes.Contains(Net.XxHash(file), StringComparer.OrdinalIgnoreCase)) {
+                    ok = true;
+                    break;
+                }
+                log("  checksum mismatch, trying next source");
+            }
             catch (Exception ex) { log("  download failed: " + ex.Message); }
             try { File.Delete(file); } catch { }
         }
@@ -167,7 +281,8 @@ record EverestBuild(int Version, string Branch, string Download, DateTime Date, 
 static class EverestSvc {
     const string Feed = "https://maddie480.ovh/celeste/everest-versions";
     public static async Task<List<EverestBuild>> Versions() {
-        var j = JsonDocument.Parse(await Net.Http.GetStringAsync(Feed)).RootElement; var l = new List<EverestBuild>();
+        var j = JsonDocument.Parse(await Net.Http.GetStringAsync(Feed)).RootElement;
+        var l = new List<EverestBuild>();
         foreach (var e in j.EnumerateArray())
             l.Add(new EverestBuild(e.GetProperty("version").GetInt32(), e.GetProperty("branch").GetString(), e.GetProperty("mainDownload").GetString(),
                 DateTime.TryParse(e.GetProperty("date").GetString(), out var d) ? d.ToLocalTime() : default,
@@ -175,12 +290,21 @@ static class EverestSvc {
         return l.OrderByDescending(x => x.Version).ToList();
     }
     public static string CelesteVersion(Install i) {
-        foreach (var f in new[] { "Celeste.dll", "Celeste.exe" }) { try { var p = Path.Combine(i.Path, f); if (File.Exists(p) && FileVersionInfo.GetVersionInfo(p).FileVersion is string v && v != "1.0.0.0") return v; } catch { } }
+        foreach (var f in new[] { "Celeste.dll", "Celeste.exe" }) {
+            try {
+                var p = Path.Combine(i.Path, f);
+                if (File.Exists(p) && FileVersionInfo.GetVersionInfo(p).FileVersion is string v && v != "1.0.0.0") return v;
+            } catch { }
+        }
         return "1.4.0.0";   // Celeste's only released version; patched copies report a launcher stub version
     }
     public static string EverestVersion(Install i) {
-        var p = Path.Combine(i.Path, "Celeste.Mod.mm.dll"); if (!File.Exists(p)) return null;
-        try { var b = File.ReadAllText(Path.Combine(i.Path, "update-build.txt")).Trim(); if (int.TryParse(b, out var n) && n > 0) return n.ToString(); } catch { }
+        var p = Path.Combine(i.Path, "Celeste.Mod.mm.dll");
+        if (!File.Exists(p)) return null;
+        try {
+            var b = File.ReadAllText(Path.Combine(i.Path, "update-build.txt")).Trim();
+            if (int.TryParse(b, out var n) && n > 0) return n.ToString();
+        } catch { }
         return "(build unknown)";   // the DLL's own version number is not the Everest build number, so don't show it as one
     }
 
@@ -191,26 +315,43 @@ static class EverestSvc {
         var m = Regex.Match(b.Download, @"github\.com/EverestAPI/Everest/releases/download/([^/]+)/main\.zip");
         string want = m.Success ? await Net.GitHubDigest("https://api.github.com/repos/EverestAPI/Everest/releases/tags/" + m.Groups[1].Value, "main.zip") : null;
         if (want != null) {
-            if (!Net.Sha256(tmp).Equals(want, StringComparison.OrdinalIgnoreCase)) { File.Delete(tmp); throw new Exception("Everest download failed its checksum. Nothing was installed."); }
+            if (!Net.Sha256(tmp).Equals(want, StringComparison.OrdinalIgnoreCase)) {
+                File.Delete(tmp);
+                throw new Exception("Everest download failed its checksum. Nothing was installed.");
+            }
             log("Download verified (SHA-256).");
-        } else if (!allowUnverified) { File.Delete(tmp); throw new Exception("This build has no published checksum (beta/dev builds come from Azure DevOps). Tick \"Allow unverified builds\" to install it anyway."); }
+        } else if (!allowUnverified) {
+            File.Delete(tmp);
+            throw new Exception("This build has no published checksum (beta/dev builds come from Azure DevOps). Tick \"Allow unverified builds\" to install it anyway.");
+        }
         else log("WARNING: installing a build with no published checksum.");
         log("Extracting...");
         var root = Path.GetFullPath(inst.Path).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
         await Task.Run(() => {
             using var zf = ZipFile.OpenRead(tmp);
             foreach (var e in zf.Entries) {
-                var rel = e.FullName; if (rel.StartsWith("main/")) rel = rel.Substring(5); if (rel.Length == 0 || rel.EndsWith("/")) continue;
-                var dest = Path.GetFullPath(Path.Combine(inst.Path, rel)); if (!dest.StartsWith(root, Platform.Windows ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal)) continue;   // zip-slip guard
-                Directory.CreateDirectory(Path.GetDirectoryName(dest)); e.ExtractToFile(dest, true);
+                var rel = e.FullName;
+                if (rel.StartsWith("main/")) rel = rel.Substring(5);
+                if (rel.Length == 0 || rel.EndsWith("/")) continue;
+                var dest = Path.GetFullPath(Path.Combine(inst.Path, rel));
+                if (!dest.StartsWith(root, Platform.Windows ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal)) continue;   // zip-slip guard
+                Directory.CreateDirectory(Path.GetDirectoryName(dest));
+                e.ExtractToFile(dest, true);
             }
         });
         File.Delete(tmp);
         log("Running the Everest patcher...");
-        var exe = Platform.MiniInstallerPath(inst.Path); if (!File.Exists(exe)) throw new Exception("The Everest patcher for this system (" + Path.GetFileName(exe) + ") was not in the download.");
+        var exe = Platform.MiniInstallerPath(inst.Path);
+        if (!File.Exists(exe)) throw new Exception("The Everest patcher for this system (" + Path.GetFileName(exe) + ") was not in the download.");
         Platform.MakeExecutable(exe);
-        var p = Process.Start(new ProcessStartInfo(exe) { WorkingDirectory = inst.Path, UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true });
-        var o = await p.StandardOutput.ReadToEndAsync(); await p.WaitForExitAsync();
+        var p = Process.Start(new ProcessStartInfo(exe) {
+            WorkingDirectory = inst.Path,
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            RedirectStandardOutput = true
+        });
+        var o = await p.StandardOutput.ReadToEndAsync();
+        await p.WaitForExitAsync();
         if (p.ExitCode != 0) throw new Exception("Patching failed:\r\n" + o.Substring(Math.Max(0, o.Length - 600)));
         if (!File.Exists(Path.Combine(inst.Path, "Celeste.Mod.mm.dll"))) throw new Exception("The patcher finished but Everest is not present; the install did not complete.");
         File.WriteAllText(Path.Combine(inst.Path, "update-build.txt"), b.Version.ToString());   // the same marker Olympus writes, so the build number is shown correctly
@@ -219,10 +360,13 @@ static class EverestSvc {
 
     // Everest keeps the untouched game files in "orig"; restoring them and removing Celeste.Mod.mm.dll returns to vanilla.
     public static void Uninstall(Install inst, Action<string> log) {
-        var orig = Path.Combine(inst.Path, "orig"); if (!Directory.Exists(orig)) throw new Exception("No 'orig' backup folder found, so Everest can't be removed safely.");
+        var orig = Path.Combine(inst.Path, "orig");
+        if (!Directory.Exists(orig)) throw new Exception("No 'orig' backup folder found, so Everest can't be removed safely.");
         foreach (var f in Directory.GetFiles(orig)) File.Copy(f, Path.Combine(inst.Path, Path.GetFileName(f)), true);
-        var mm = Path.Combine(inst.Path, "Celeste.Mod.mm.dll"); if (File.Exists(mm)) File.Delete(mm);
-        var ub = Path.Combine(inst.Path, "update-build.txt"); if (File.Exists(ub)) File.Delete(ub);
+        var mm = Path.Combine(inst.Path, "Celeste.Mod.mm.dll");
+        if (File.Exists(mm)) File.Delete(mm);
+        var ub = Path.Combine(inst.Path, "update-build.txt");
+        if (File.Exists(ub)) File.Delete(ub);
         log("Everest removed. Your Mods and Saves folders were not touched.");
     }
 }
@@ -233,7 +377,8 @@ record GbFile(long Id, string Name, DateTime Date, int Downloads, long Size, str
 record GbProfile(string Name, string Url, string Submitter, string Text, List<GbFile> Files, List<string> Images, int Likes, int Downloads, DateTime Added);
 
 static class GameBanana {
-    const string Api = "https://gamebanana.com/apiv11/"; const int CelesteGame = 6460;
+    const string Api = "https://gamebanana.com/apiv11/";
+    const int CelesteGame = 6460;
     static DateTime Unix(long s) => DateTimeOffset.FromUnixTimeSeconds(s).LocalDateTime;
     static string Str(JsonElement e, string k) => e.TryGetProperty(k, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() : "";
     static int Int(JsonElement e, string k) => e.TryGetProperty(k, out var v) && v.ValueKind == JsonValueKind.Number ? v.GetInt32() : 0;
@@ -242,7 +387,8 @@ static class GameBanana {
         var url = string.IsNullOrWhiteSpace(q)
             ? $"{Api}Mod/Index?_nPage={page}&_nPerpage=30&_aFilters%5BGeneric_Game%5D={CelesteGame}&_sSort=Generic_MostDownloaded"
             : $"{Api}Util/Search/Results?_sSearchString={Uri.EscapeDataString(q.Trim())}&_idGameRow={CelesteGame}&_nPage={page}&_nPerpage=30";
-        var j = JsonDocument.Parse(await Net.Http.GetStringAsync(url)).RootElement; var list = new List<GbMod>();
+        var j = JsonDocument.Parse(await Net.Http.GetStringAsync(url)).RootElement;
+        var list = new List<GbMod>();
         foreach (var r in j.GetProperty("_aRecords").EnumerateArray()) {
             if (Str(r, "_sModelName") != "Mod") continue;
             string sub = r.TryGetProperty("_aSubmitter", out var s) ? Str(s, "_sName") : "", cat = r.TryGetProperty("_aRootCategory", out var c) ? Str(c, "_sName") : "";
@@ -255,50 +401,84 @@ static class GameBanana {
     }
 
     public static async Task<GbProfile> Profile(int id) {
-        var j = JsonDocument.Parse(await Net.Http.GetStringAsync($"{Api}Mod/{id}/ProfilePage")).RootElement; var files = new List<GbFile>();
+        var j = JsonDocument.Parse(await Net.Http.GetStringAsync($"{Api}Mod/{id}/ProfilePage")).RootElement;
+        var files = new List<GbFile>();
         if (j.TryGetProperty("_aFiles", out var fs) && fs.ValueKind == JsonValueKind.Array)
             foreach (var f in fs.EnumerateArray())
                 files.Add(new GbFile(f.GetProperty("_idRow").GetInt64(), Str(f, "_sFile"), f.TryGetProperty("_tsDateAdded", out var d) && d.ValueKind == JsonValueKind.Number ? Unix(d.GetInt64()) : default,
                     Int(f, "_nDownloadCount"), f.TryGetProperty("_nFilesize", out var sz) && sz.ValueKind == JsonValueKind.Number ? sz.GetInt64() : 0, Str(f, "_sDescription"), Str(f, "_sMd5Checksum"), Str(f, "_sDownloadUrl")));
         var sub = j.TryGetProperty("_aSubmitter", out var s) ? Str(s, "_sName") : "";
         long added = j.TryGetProperty("_tsDateAdded", out var da) && da.ValueKind == JsonValueKind.Number ? da.GetInt64() : 0;
-        return new GbProfile(Str(j, "_sName"), Str(j, "_sProfileUrl"), sub, HtmlToText(Str(j, "_sText")), files.OrderByDescending(f => f.Date).ToList(), PreviewUrls(j, "_sFile530").ToList(), Int(j, "_nLikeCount"), Int(j, "_nDownloadCount"), added > 0 ? Unix(added) : default);
+        return new GbProfile(
+            Str(j, "_sName"),
+            Str(j, "_sProfileUrl"),
+            sub,
+            HtmlToText(Str(j, "_sText")),
+            files.OrderByDescending(f => f.Date).ToList(),
+            PreviewUrls(j, "_sFile530").ToList(),
+            Int(j, "_nLikeCount"),
+            Int(j, "_nDownloadCount"),
+            added > 0 ? Unix(added) : default);
     }
 
     // Preview screenshot URLs (e.g. field "_sFile220" = 220px thumbnail, "_sFile530" = 530px). Only images.gamebanana.com is used.
     public static IEnumerable<string> PreviewUrls(JsonElement rec, string field) {
         if (!rec.TryGetProperty("_aPreviewMedia", out var pm) || pm.ValueKind != JsonValueKind.Object || !pm.TryGetProperty("_aImages", out var ims) || ims.ValueKind != JsonValueKind.Array) yield break;
         foreach (var im in ims.EnumerateArray()) {
-            var b = Str(im, "_sBaseUrl"); var f = Str(im, field); if (string.IsNullOrEmpty(f)) f = Str(im, "_sFile");
+            var b = Str(im, "_sBaseUrl");
+            var f = Str(im, field);
+            if (string.IsNullOrEmpty(f)) f = Str(im, "_sFile");
             if (!string.IsNullOrEmpty(b) && !string.IsNullOrEmpty(f)) yield return b.TrimEnd('/') + "/" + f;
         }
     }
 
     public static string HtmlToText(string html) {
         if (string.IsNullOrEmpty(html)) return "";
-        var t = Regex.Replace(html, @"<\s*(br|/p|/div|/li|/h\d)\s*/?>", "\n", RegexOptions.IgnoreCase); t = Regex.Replace(t, @"<\s*li[^>]*>", "• ", RegexOptions.IgnoreCase);
-        t = Regex.Replace(t, @"<[^>]+>", ""); t = System.Net.WebUtility.HtmlDecode(t); t = Regex.Replace(t, @"[ \t]+\n", "\n"); t = Regex.Replace(t, @"\n{3,}", "\n\n"); return t.Trim();
+        var t = Regex.Replace(html, @"<\s*(br|/p|/div|/li|/h\d)\s*/?>", "\n", RegexOptions.IgnoreCase);
+        t = Regex.Replace(t, @"<\s*li[^>]*>", "• ", RegexOptions.IgnoreCase);
+        t = Regex.Replace(t, @"<[^>]+>", "");
+        t = System.Net.WebUtility.HtmlDecode(t);
+        t = Regex.Replace(t, @"[ \t]+\n", "\n");
+        t = Regex.Replace(t, @"\n{3,}", "\n\n");
+        return t.Trim();
     }
 
-    public static string Md5(string file) { using var s = File.OpenRead(file); return Convert.ToHexString(System.Security.Cryptography.MD5.HashData(s)).ToLowerInvariant(); }
+    public static string Md5(string file) {
+        using var s = File.OpenRead(file);
+        return Convert.ToHexString(System.Security.Cryptography.MD5.HashData(s)).ToLowerInvariant();
+    }
 
     // Downloads to dest and verifies GameBanana's published MD5. Deletes the file and throws on any mismatch.
     public static async Task DownloadVerified(GbFile f, string dest, IProgress<int> prog) {
         if (string.IsNullOrEmpty(f.Md5)) throw new Exception("This file has no published checksum, so it won't be installed.");
         if (!f.DownloadUrl.StartsWith("https://gamebanana.com/")) throw new Exception("Unexpected download location; refusing.");
         await Net.Download(f.DownloadUrl, dest, prog);
-        if (!Md5(dest).Equals(f.Md5, StringComparison.OrdinalIgnoreCase)) { try { File.Delete(dest); } catch { } throw new Exception("Download failed its checksum. Nothing was installed."); }
+        if (!Md5(dest).Equals(f.Md5, StringComparison.OrdinalIgnoreCase)) {
+            try { File.Delete(dest); } catch { }
+            throw new Exception("Download failed its checksum. Nothing was installed.");
+        }
     }
 
     public static async Task InstallFile(Install inst, GbFile f, Config cfg, Action<string> log, IProgress<int> prog) {
-        Directory.CreateDirectory(Mods.Dir(inst)); var safe = Path.GetFileName(f.Name); if (!safe.EndsWith(".zip", StringComparison.OrdinalIgnoreCase)) throw new Exception("Only .zip mod files can be installed.");
-        var tmp = Path.Combine(Path.GetTempPath(), "mz-gb-" + f.Id + ".zip"); log($"Downloading {safe}...");
-        await DownloadVerified(f, tmp, prog); log("Verified (MD5 published by GameBanana).");
-        string yaml; try { yaml = Mods.YamlOfZip(tmp); } catch { yaml = ""; }
-        if (!yaml.Contains("Name:")) { File.Delete(tmp); throw new Exception("That zip has no everest.yaml, so it isn't an Everest mod. Nothing was installed."); }
-        File.Move(tmp, Path.Combine(Mods.Dir(inst), safe), true); log($"Installed {safe}.");
-        var have = Mods.Scan(inst).Select(m => m.Name).ToHashSet(StringComparer.OrdinalIgnoreCase); var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var dep in Mods.ParseYaml(yaml).deps) if (dep != "Everest" && dep != "EverestCore" && !have.Contains(dep)) await Mods.InstallWithDeps(inst, dep, cfg, log, null, seen);
+        Directory.CreateDirectory(Mods.Dir(inst));
+        var safe = Path.GetFileName(f.Name);
+        if (!safe.EndsWith(".zip", StringComparison.OrdinalIgnoreCase)) throw new Exception("Only .zip mod files can be installed.");
+        var tmp = Path.Combine(Path.GetTempPath(), "mz-gb-" + f.Id + ".zip");
+        log($"Downloading {safe}...");
+        await DownloadVerified(f, tmp, prog);
+        log("Verified (MD5 published by GameBanana).");
+        string yaml;
+        try { yaml = Mods.YamlOfZip(tmp); } catch { yaml = ""; }
+        if (!yaml.Contains("Name:")) {
+            File.Delete(tmp);
+            throw new Exception("That zip has no everest.yaml, so it isn't an Everest mod. Nothing was installed.");
+        }
+        File.Move(tmp, Path.Combine(Mods.Dir(inst), safe), true);
+        log($"Installed {safe}.");
+        var have = Mods.Scan(inst).Select(m => m.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var dep in Mods.ParseYaml(yaml).deps)
+            if (dep != "Everest" && dep != "EverestCore" && !have.Contains(dep)) await Mods.InstallWithDeps(inst, dep, cfg, log, null, seen);
     }
 }
 
@@ -306,7 +486,8 @@ static class GameBanana {
 record NewsItem(string Title, string Text, string Image, string Link);
 static class News {
     public static async Task<List<NewsItem>> Get() {
-        var j = JsonDocument.Parse(await Net.Http.GetStringAsync("https://maddie480.ovh/celeste/olympus-news.json")).RootElement; var l = new List<NewsItem>();
+        var j = JsonDocument.Parse(await Net.Http.GetStringAsync("https://maddie480.ovh/celeste/olympus-news.json")).RootElement;
+        var l = new List<NewsItem>();
         foreach (var e in j.EnumerateArray()) {
             string S(string k) => e.TryGetProperty(k, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() : "";
             l.Add(new NewsItem(S("title"), S("shortDescription"), S("image"), S("link")));
@@ -326,9 +507,14 @@ static class Extras {
 
     public static async Task<(string tag, string asset, string url, string sha)> Latest(ExtraMod m) {
         var j = JsonDocument.Parse(await Net.Http.GetStringAsync($"https://api.github.com/repos/{m.Repo}/releases/latest")).RootElement;
-        var rx = new Regex("^" + Regex.Escape(m.Name) + @"(?:[._-]v?(?<v>\d+(?:\.\d+){0,3}))?\.zip$", RegexOptions.IgnoreCase);
+        var rx = new Regex(
+            "^" + Regex.Escape(m.Name) + @"(?:[._-]v?(?<v>\d+(?:\.\d+){0,3}))?\.zip$",
+            RegexOptions.IgnoreCase);
         // Prefer a versioned asset ("Name.3.0.0.zip") over a plain "Name.zip"; the highest version wins.
-        static Version V(Match mt) { var s = mt.Groups["v"].Value; return mt.Groups["v"].Success && Version.TryParse(s.Contains('.') ? s : s + ".0", out var v) ? v : new Version(0, 0); }
+        static Version V(Match mt) {
+            var s = mt.Groups["v"].Value;
+            return mt.Groups["v"].Success && Version.TryParse(s.Contains('.') ? s : s + ".0", out var v) ? v : new Version(0, 0);
+        }
         var picks = j.GetProperty("assets").EnumerateArray().Select(a => (a, mt: rx.Match(a.GetProperty("name").GetString() ?? ""))).Where(x => x.mt.Success).OrderByDescending(x => V(x.mt)).ToList();
         if (picks.Count == 0) throw new Exception($"No {m.Name} zip in the latest release.");
         var b = picks[0].a;
@@ -338,22 +524,37 @@ static class Extras {
 
     public static async Task Install(Install inst, ExtraMod m, Config cfg, Action<string> log, IProgress<int> prog) {
         var existing = Mods.Scan(inst).FirstOrDefault(x => x.Name.Equals(m.Name, StringComparison.OrdinalIgnoreCase));
-        if (existing is { IsDir: true }) { log($"{m.Name} {existing.Version} is already installed as a folder (Mods/{existing.File}); leaving it alone."); return; }
+        if (existing is { IsDir: true }) {
+            log($"{m.Name} {existing.Version} is already installed as a folder (Mods/{existing.File}); leaving it alone.");
+            return;
+        }
         var (tag, asset, url, sha) = await Latest(m);
         if (sha == null) throw new Exception($"The {m.Name} release has no published checksum; refusing to install it.");
         if (!url.StartsWith($"https://github.com/{m.Repo}/releases/download/", StringComparison.OrdinalIgnoreCase)) throw new Exception("Unexpected download location; refusing.");
-        var tmp = Path.Combine(Path.GetTempPath(), "mz-extra-" + m.Name + ".zip"); log($"Downloading {m.Name} ({tag}, {asset})...");
+        var tmp = Path.Combine(Path.GetTempPath(), "mz-extra-" + m.Name + ".zip");
+        log($"Downloading {m.Name} ({tag}, {asset})...");
         await Net.Download(url, tmp, prog);
-        if (!Net.Sha256(tmp).Equals(sha, StringComparison.OrdinalIgnoreCase)) { File.Delete(tmp); throw new Exception($"{m.Name} download failed its checksum. Nothing was installed."); }
+        if (!Net.Sha256(tmp).Equals(sha, StringComparison.OrdinalIgnoreCase)) {
+            File.Delete(tmp);
+            throw new Exception($"{m.Name} download failed its checksum. Nothing was installed.");
+        }
         log("Verified (SHA-256 published by GitHub).");
-        string yaml; try { yaml = Mods.YamlOfZip(tmp); } catch { yaml = ""; }
+        string yaml;
+        try { yaml = Mods.YamlOfZip(tmp); } catch { yaml = ""; }
         var (name, ver, deps) = Mods.ParseYaml(yaml);
-        if (!string.Equals(name, m.Name, StringComparison.OrdinalIgnoreCase)) { File.Delete(tmp); throw new Exception($"That zip's everest.yaml doesn't name {m.Name}. Nothing was installed."); }
+        if (!string.Equals(name, m.Name, StringComparison.OrdinalIgnoreCase)) {
+            File.Delete(tmp);
+            throw new Exception($"That zip's everest.yaml doesn't name {m.Name}. Nothing was installed.");
+        }
         Directory.CreateDirectory(Mods.Dir(inst));
-        if (existing != null && !existing.File.Equals(m.Name + ".zip", StringComparison.OrdinalIgnoreCase)) try { File.Delete(Path.Combine(Mods.Dir(inst), existing.File)); } catch { }
-        File.Move(tmp, Path.Combine(Mods.Dir(inst), m.Name + ".zip"), true); log($"Installed {m.Name} {ver}.");
-        var have = Mods.Scan(inst).Select(x => x.Name).ToHashSet(StringComparer.OrdinalIgnoreCase); var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var dep in deps) if (dep != "Everest" && dep != "EverestCore" && !have.Contains(dep)) await Mods.InstallWithDeps(inst, dep, cfg, log, null, seen);
+        if (existing != null && !existing.File.Equals(m.Name + ".zip", StringComparison.OrdinalIgnoreCase))
+            try { File.Delete(Path.Combine(Mods.Dir(inst), existing.File)); } catch { }
+        File.Move(tmp, Path.Combine(Mods.Dir(inst), m.Name + ".zip"), true);
+        log($"Installed {m.Name} {ver}.");
+        var have = Mods.Scan(inst).Select(x => x.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var dep in deps)
+            if (dep != "Everest" && dep != "EverestCore" && !have.Contains(dep)) await Mods.InstallWithDeps(inst, dep, cfg, log, null, seen);
     }
 }
 
@@ -363,32 +564,56 @@ static class Topo {
     public static bool Supported => Platform.Windows;
     static void Need() { if (!Supported) throw new Exception("Topo is only available on Windows."); }
     public static string Dir => Path.Combine(Config.DataDir, "topo");
-    public static string Installed() { try { return File.ReadAllText(Path.Combine(Dir, "version.txt")).Trim(); } catch { return null; } }
+    public static string Installed() {
+        try { return File.ReadAllText(Path.Combine(Dir, "version.txt")).Trim(); } catch { return null; }
+    }
     public static async Task<(string tag, string url, string sha)> Latest(bool ai) {
         var j = JsonDocument.Parse(await Net.Http.GetStringAsync("https://api.github.com/repos/Magedeline/Topo/releases/latest")).RootElement;
         var rx = new Regex(ai ? @"^Topo-AI-.+-win-x64\.zip$" : @"^Topo-\d.+-win-x64\.zip$");
         foreach (var a in j.GetProperty("assets").EnumerateArray()) {
-            var n = a.GetProperty("name").GetString(); if (!rx.IsMatch(n)) continue;
+            var n = a.GetProperty("name").GetString();
+            if (!rx.IsMatch(n)) continue;
             return (j.GetProperty("tag_name").GetString(), a.GetProperty("browser_download_url").GetString(), a.TryGetProperty("digest", out var d) ? d.GetString()?.Replace("sha256:", "") : null);
         }
         throw new Exception("No matching Topo download found in the latest release.");
     }
     public static async Task Install(bool ai, Action<string> log, IProgress<int> prog) {
-        Need(); var (tag, url, sha) = await Latest(ai); if (sha == null) throw new Exception("The Topo release has no published checksum; refusing to install it.");
-        var tmp = Path.Combine(Path.GetTempPath(), "mountzantas-topo.zip"); log($"Downloading Topo {tag}{(ai ? " (+ AI)" : "")}..."); await Net.Download(url, tmp, prog);
-        if (!Net.Sha256(tmp).Equals(sha, StringComparison.OrdinalIgnoreCase)) { File.Delete(tmp); throw new Exception("Topo download failed its checksum. Nothing was installed."); }
-        log("Verified (SHA-256)."); Extract(tmp, tag + (ai ? " + AI" : ""), log); File.Delete(tmp);
+        Need();
+        var (tag, url, sha) = await Latest(ai);
+        if (sha == null) throw new Exception("The Topo release has no published checksum; refusing to install it.");
+        var tmp = Path.Combine(Path.GetTempPath(), "mountzantas-topo.zip");
+        log($"Downloading Topo {tag}{(ai ? " (+ AI)" : "")}...");
+        await Net.Download(url, tmp, prog);
+        if (!Net.Sha256(tmp).Equals(sha, StringComparison.OrdinalIgnoreCase)) {
+            File.Delete(tmp);
+            throw new Exception("Topo download failed its checksum. Nothing was installed.");
+        }
+        log("Verified (SHA-256).");
+        Extract(tmp, tag + (ai ? " + AI" : ""), log);
+        File.Delete(tmp);
     }
-    public static void InstallLocal(string zip, Action<string> log) { log("Installing from a local file (no published checksum to compare against)..."); Extract(zip, "local file", log); }
+    public static void InstallLocal(string zip, Action<string> log) {
+        log("Installing from a local file (no published checksum to compare against)...");
+        Extract(zip, "local file", log);
+    }
     static void Extract(string zip, string label, Action<string> log) {
-        using (var z = ZipFile.OpenRead(zip)) if (z.GetEntry("Topo.exe") == null) throw new Exception("That zip doesn't contain Topo.exe at its top level.");
-        if (Directory.Exists(Dir)) Directory.Delete(Dir, true); Directory.CreateDirectory(Dir);
-        ZipFile.ExtractToDirectory(zip, Dir, true); File.WriteAllText(Path.Combine(Dir, "version.txt"), label); log("Topo installed.");
+        using (var z = ZipFile.OpenRead(zip))
+            if (z.GetEntry("Topo.exe") == null) throw new Exception("That zip doesn't contain Topo.exe at its top level.");
+        if (Directory.Exists(Dir)) Directory.Delete(Dir, true);
+        Directory.CreateDirectory(Dir);
+        ZipFile.ExtractToDirectory(zip, Dir, true);
+        File.WriteAllText(Path.Combine(Dir, "version.txt"), label);
+        log("Topo installed.");
     }
     public static void Launch(Install inst, string map = null) {
-        Need(); var exe = Path.Combine(Dir, "Topo.exe"); if (!File.Exists(exe)) throw new Exception("Topo is not installed yet.");
+        Need();
+        var exe = Path.Combine(Dir, "Topo.exe");
+        if (!File.Exists(exe)) throw new Exception("Topo is not installed yet.");
         var psi = new ProcessStartInfo(exe) { WorkingDirectory = Dir, UseShellExecute = false };
-        if (map != null) { psi.ArgumentList.Add("--map"); psi.ArgumentList.Add(map); }   // Topo: --map <file.bin>
+        if (map != null) {
+            psi.ArgumentList.Add("--map");
+            psi.ArgumentList.Add(map);
+        }   // Topo: --map <file.bin>
         if (inst != null) psi.Environment["CELESTE_DIR"] = inst.Path;   // Topo checks CELESTE_DIR when locating the game
         Process.Start(psi);
     }

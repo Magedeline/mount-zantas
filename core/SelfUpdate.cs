@@ -14,7 +14,8 @@ static class SelfUpdate {
         var j = JsonDocument.Parse(await Net.Http.GetStringAsync($"https://api.github.com/repos/{Repo}/releases/latest")).RootElement;
         if (j.TryGetProperty("draft", out var d) && d.GetBoolean()) return null;
         if (j.TryGetProperty("prerelease", out var p) && p.GetBoolean()) return null;
-        var tag = j.GetProperty("tag_name").GetString(); var ver = tag.TrimStart('v', 'V');
+        var tag = j.GetProperty("tag_name").GetString();
+        var ver = tag.TrimStart('v', 'V');
         if (!ModDb.Newer(current, ver)) return null;
         foreach (var a in j.GetProperty("assets").EnumerateArray()) {
             if (a.GetProperty("name").GetString() != assetName) continue;
@@ -29,18 +30,27 @@ static class SelfUpdate {
 
     // Downloads the release next to `exePath` and verifies it. Returns the path of the verified new file.
     public static async Task<string> Download(Release r, string exePath, IProgress<int> prog = null) {
-        var tmp = exePath + ".new"; if (File.Exists(tmp)) File.Delete(tmp);
+        var tmp = exePath + ".new";
+        if (File.Exists(tmp)) File.Delete(tmp);
         await Net.Download(r.Url, tmp, prog);
-        if (!string.Equals(Net.Sha256(tmp), r.Sha256, StringComparison.OrdinalIgnoreCase)) { File.Delete(tmp); throw new InvalidDataException("The downloaded update did not match its published checksum, so it was discarded."); }
+        if (!string.Equals(Net.Sha256(tmp), r.Sha256, StringComparison.OrdinalIgnoreCase)) {
+            File.Delete(tmp);
+            throw new InvalidDataException("The downloaded update did not match its published checksum, so it was discarded.");
+        }
         return tmp;
     }
 
     // Windows lets a running exe be renamed: move it aside, put the new one in its place. Caller then starts it and exits.
     public static void Swap(string exePath, string verifiedNew) {
-        var old = exePath + ".old"; if (File.Exists(old)) File.Delete(old);
-        File.Move(exePath, old); File.Move(verifiedNew, exePath);
+        var old = exePath + ".old";
+        if (File.Exists(old)) File.Delete(old);
+        File.Move(exePath, old);
+        File.Move(verifiedNew, exePath);
     }
 
     // Remove leftovers from a previous update.
-    public static void Cleanup(string exePath) { foreach (var f in new[] { exePath + ".old", exePath + ".new" }) try { if (File.Exists(f)) File.Delete(f); } catch { } }
+    public static void Cleanup(string exePath) {
+        foreach (var f in new[] { exePath + ".old", exePath + ".new" })
+            try { if (File.Exists(f)) File.Delete(f); } catch { }
+    }
 }
